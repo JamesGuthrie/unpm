@@ -51,14 +51,13 @@ pub async fn outdated() -> anyhow::Result<()> {
 
     let mut found = false;
     for (name, current, latest) in &results {
-        if let Some(latest) = latest {
-            if latest != current {
-                if !found {
-                    println!("Outdated dependencies:");
-                    found = true;
-                }
-                println!("  {name}: {current} -> {latest}");
+        if let Some(latest) = latest
+            && latest != current {
+            if !found {
+                println!("Outdated dependencies:");
+                found = true;
             }
+            println!("  {name}: {current} -> {latest}");
         }
     }
 

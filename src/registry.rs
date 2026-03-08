@@ -168,6 +168,12 @@ fn flatten_files(nodes: &[ApiFileNode], prefix: &str, out: &mut Vec<FileEntry>) 
 const API_BASE: &str = "https://data.jsdelivr.com/v1/packages";
 const CDN_BASE: &str = "https://cdn.jsdelivr.net";
 
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Registry {
     pub fn new() -> Self {
         Self {

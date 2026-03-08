@@ -68,13 +68,12 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                             Some(v) => {
                                 // If already at latest compatible, check if a newer major exists
                                 if v == old_version {
-                                    if let Some(abs_latest) = latest_stable(&pkg_info.versions) {
-                                        if abs_latest != old_version {
-                                            println!(
-                                                "{name}: {old_version} held back \
-                                                 ({abs_latest} available, use --latest to update across major versions)"
-                                            );
-                                        }
+                                    if let Some(abs_latest) = latest_stable(&pkg_info.versions)
+                                        && abs_latest != old_version {
+                                        println!(
+                                            "{name}: {old_version} held back \
+                                             ({abs_latest} available, use --latest to update across major versions)"
+                                        );
                                     }
                                     continue;
                                 }

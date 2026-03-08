@@ -213,10 +213,9 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 }
             }
             CheckResult::Outdated { name, current, latest } => {
-                if let Some(latest) = latest {
-                    if latest != current {
-                        outdated.push(format!("  {name}: {current} -> {latest}"));
-                    }
+                if let Some(latest) = latest
+                    && latest != current {
+                    outdated.push(format!("  {name}: {current} -> {latest}"));
                 }
             }
         }

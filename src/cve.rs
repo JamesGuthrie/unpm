@@ -41,6 +41,12 @@ struct ApiSeverity {
     score: String,
 }
 
+impl Default for CveChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CveChecker {
     pub fn new() -> Self {
         Self {

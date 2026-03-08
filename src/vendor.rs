@@ -33,12 +33,11 @@ pub fn clean(output_dir: &Path, known_filenames: &HashSet<&str>) -> anyhow::Resu
         if !path.is_file() {
             continue;
         }
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if !known_filenames.contains(name) {
-                std::fs::remove_file(&path)
-                    .with_context(|| format!("Failed to remove: {}", path.display()))?;
-                println!("Removed untracked file: {name}");
-            }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && !known_filenames.contains(name) {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove: {}", path.display()))?;
+            println!("Removed untracked file: {name}");
         }
     }
 

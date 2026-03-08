@@ -71,7 +71,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     let vendored_filename = if has_collision {
         format!(
             "{}_{}",
-            manifest_key.replace('/', "-").replace(':', "-"),
+            manifest_key.replace(['/', ':'], "-"),
             original_filename
         )
     } else {
@@ -329,9 +329,9 @@ fn handle_minification(
     Ok(selected_file.to_string())
 }
 
-fn find_min_counterpart<'a>(
+fn find_min_counterpart(
     selected: &str,
-    all_files: &[&'a str],
+    all_files: &[&str],
 ) -> Option<(String, String)> {
     for ext in &[".js", ".css"] {
         let min_ext = format!(".min{ext}");
@@ -344,10 +344,10 @@ fn find_min_counterpart<'a>(
             if all_files.contains(&unminified.as_str()) {
                 return Some((selected.to_string(), unminified));
             }
-        } else if selected.ends_with(ext) {
+        } else if let Some(stripped) = selected.strip_suffix(ext) {
             let minified = format!(
                 "{}{min_ext}",
-                &selected[..selected.len() - ext.len()]
+                stripped
             );
             if all_files.contains(&minified.as_str()) {
                 return Some((minified, selected.to_string()));
