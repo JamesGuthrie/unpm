@@ -22,12 +22,12 @@ output_dir = "static/vendor"
 
 ```toml
 [dependencies]
-htmx = "2.0.4"
+htmx.org = "2.0.4"
 d3 = { version = "7.9.0", file = "dist/d3.min.js" }
 some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
 ```
 
-Short form (`htmx = "2.0.4"`) uses convention to resolve via the default CDN. Extended form allows specifying `file` path or full `url` override.
+Package names must be exact npm package names (e.g., `htmx.org` not `htmx`). No fuzzy resolution — this prevents typosquatting/namesquatting attacks. Short form (`htmx.org = "2.0.4"`) resolves the default entry point via the CDN. Extended form allows specifying `file` path or full `url` override.
 
 ### unpm.lock (generated)
 
@@ -51,7 +51,7 @@ Short form (`htmx = "2.0.4"`) uses convention to resolve via the default CDN. Ex
 
 ## `unpm add` Interactive Flow
 
-1. Resolve package name via jsdelivr API (handle name mapping, e.g. `htmx` → `htmx.org`)
+1. Look up exact package name on jsdelivr — fail if not found (no fuzzy matching)
 2. Select version (default: latest stable, option to pick another)
 3. Select file:
    - "Use default entry point" (from package.json main/browser/module)
@@ -59,7 +59,7 @@ Short form (`htmx = "2.0.4"`) uses convention to resolve via the default CDN. Ex
 4. Minification preference — if both `foo.js` and `foo.min.js` exist, ask which
 5. Confirm — show summary, write to `unpm.toml` + `unpm.lock`
 
-Non-interactive mode via flags: `unpm add htmx --version 2.0.4 --file dist/htmx.min.js`
+Non-interactive mode via flags: `unpm add htmx.org --version 2.0.4 --file dist/htmx.min.js`
 
 ## Security & Verification
 
@@ -81,6 +81,12 @@ Non-interactive mode via flags: `unpm add htmx --version 2.0.4 --file dist/htmx.
 
 - `unpm check` queries jsdelivr for latest version of each dep
 - Reports outdated deps (informational, doesn't fail by default)
+
+### Typosquatting prevention
+
+- Package names must be exact npm package names — no alias resolution or fuzzy matching
+- `unpm add htmx` fails; `unpm add htmx.org` succeeds
+- Future: `unpm search` command for discovery (not in initial release)
 
 ### Supply-chain posture
 
