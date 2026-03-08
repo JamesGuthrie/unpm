@@ -110,7 +110,15 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
                         .ok()
                         .and_then(|info| {
                             info.tags.latest.or_else(|| {
-                                info.versions.first().map(|v| v.version.clone())
+                                // Highest stable semver version
+                                let mut stable: Vec<_> = info.versions.iter()
+                                    .filter_map(|v| {
+                                        let sv = semver::Version::parse(&v.version).ok()?;
+                                        if sv.pre.is_empty() { Some((v.version.clone(), sv)) } else { None }
+                                    })
+                                    .collect();
+                                stable.sort_by(|a, b| b.1.cmp(&a.1));
+                                stable.into_iter().next().map(|(s, _)| s)
                             })
                         })
                 } else {

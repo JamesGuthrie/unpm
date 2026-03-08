@@ -133,6 +133,37 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     Ok(())
 }
 
+/// Sort version strings by semver (highest first). Non-semver strings sort to the end.
+fn sorted_versions(versions: &[crate::registry::VersionInfo]) -> Vec<&str> {
+    let mut parsed: Vec<(&str, Option<semver::Version>)> = versions
+        .iter()
+        .map(|v| (v.version.as_str(), semver::Version::parse(&v.version).ok()))
+        .collect();
+
+    parsed.sort_by(|a, b| match (&b.1, &a.1) {
+        (Some(bv), Some(av)) => bv.cmp(av),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.0.cmp(b.0),
+    });
+
+    parsed.into_iter().map(|(s, _)| s).collect()
+}
+
+/// Find the highest stable (non-prerelease) semver version.
+fn latest_stable(versions: &[crate::registry::VersionInfo]) -> Option<&str> {
+    let mut stable: Vec<(&str, semver::Version)> = versions
+        .iter()
+        .filter_map(|v| {
+            let sv = semver::Version::parse(&v.version).ok()?;
+            if sv.pre.is_empty() { Some((v.version.as_str(), sv)) } else { None }
+        })
+        .collect();
+
+    stable.sort_by(|a, b| b.1.cmp(&a.1));
+    stable.first().map(|(s, _)| *s)
+}
+
 fn select_version(
     pkg_info: &crate::registry::PackageInfo,
     version_flag: Option<&str>,
@@ -145,12 +176,13 @@ fn select_version(
         return Ok(v.to_string());
     }
 
-    // Use latest tag if available, otherwise most recent version in list
+    // Prefer: latest tag > highest stable semver > first in sorted list
     let default_version = pkg_info
         .tags
         .latest
         .as_deref()
-        .or_else(|| pkg_info.versions.first().map(|v| v.version.as_str()))
+        .or_else(|| latest_stable(&pkg_info.versions))
+        .or_else(|| sorted_versions(&pkg_info.versions).first().copied())
         .ok_or_else(|| anyhow::anyhow!("No versions found for {}", pkg_info.name))?;
 
     if !interactive {
@@ -160,7 +192,7 @@ fn select_version(
     let label = if pkg_info.tags.latest.is_some() {
         format!("Use latest version ({default_version})?")
     } else {
-        format!("Use most recent version ({default_version})?")
+        format!("Use latest stable version ({default_version})?")
     };
 
     let use_default = Confirm::new()
@@ -172,11 +204,7 @@ fn select_version(
         return Ok(default_version.to_string());
     }
 
-    let versions: Vec<&str> = pkg_info
-        .versions
-        .iter()
-        .map(|v| v.version.as_str())
-        .collect();
+    let versions = sorted_versions(&pkg_info.versions);
 
     let selection = Select::new()
         .with_prompt("Select version")
