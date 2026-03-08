@@ -30,6 +30,8 @@ pub enum Command {
     },
     /// List all dependencies
     List,
+    /// Show dependencies with newer versions available
+    Outdated,
     /// Remove a dependency
     Remove {
         /// Package name to remove

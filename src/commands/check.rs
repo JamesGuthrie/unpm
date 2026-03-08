@@ -3,8 +3,7 @@ use crate::cve::CveChecker;
 use crate::fetch::Fetcher;
 use crate::lockfile::Lockfile;
 use crate::manifest::Manifest;
-use crate::registry::{PackageSource, Registry};
-use futures::stream::{self, StreamExt};
+use crate::registry::PackageSource;
 use std::path::Path;
 
 pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
@@ -13,8 +12,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
     let lockfile = Lockfile::load()?;
     let output_dir = Path::new(&config.output_dir);
     let client = reqwest::Client::new();
-    let cve_checker = CveChecker::with_client(client.clone());
-    let registry = Registry::with_client(client);
+    let cve_checker = CveChecker::with_client(client);
 
     if manifest.dependencies.is_empty() {
         println!("No dependencies to check.");
@@ -86,64 +84,6 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
             }
         }
 
-        println!();
-    }
-
-    // Freshness checks — parallel (up to 5 concurrent)
-    let dep_entries: Vec<(&String, &str, Option<PackageSource>)> = manifest
-        .dependencies
-        .iter()
-        .map(|(name, dep)| {
-            let source = PackageSource::from_manifest(name, dep.source()).ok();
-            (name, dep.version(), source)
-        })
-        .collect();
-
-    let freshness_results: Vec<_> = stream::iter(dep_entries)
-        .map(|(name, current_version, source)| {
-            let registry = &registry;
-            async move {
-                let latest = if let Some(src) = &source {
-                    registry
-                        .get_package(src)
-                        .await
-                        .ok()
-                        .and_then(|info| {
-                            info.tags.latest.or_else(|| {
-                                // Highest stable semver version
-                                let mut stable: Vec<_> = info.versions.iter()
-                                    .filter_map(|v| {
-                                        let sv = semver::Version::parse(&v.version).ok()?;
-                                        if sv.pre.is_empty() { Some((v.version.clone(), sv)) } else { None }
-                                    })
-                                    .collect();
-                                stable.sort_by(|a, b| b.1.cmp(&a.1));
-                                stable.into_iter().next().map(|(s, _)| s)
-                            })
-                        })
-                } else {
-                    None
-                };
-                (name.clone(), current_version.to_string(), latest)
-            }
-        })
-        .buffer_unordered(5)
-        .collect()
-        .await;
-
-    let mut has_outdated = false;
-    for (name, current, latest) in &freshness_results {
-        if let Some(latest) = latest {
-            if latest != current {
-                if !has_outdated {
-                    println!("Outdated dependencies:");
-                    has_outdated = true;
-                }
-                println!("  {name}: {current} -> {latest}");
-            }
-        }
-    }
-    if has_outdated {
         println!();
     }
 

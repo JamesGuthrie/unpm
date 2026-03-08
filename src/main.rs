@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
         Command::List => {
             unpm::commands::list()?;
         }
+        Command::Outdated => {
+            unpm::commands::outdated().await?;
+        }
         Command::Remove { package } => {
             unpm::commands::remove(&package)?;
         }
