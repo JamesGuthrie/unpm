@@ -27,6 +27,9 @@ pub enum Command {
         /// Allow known vulnerabilities
         #[arg(long)]
         allow_vulnerable: bool,
+        /// Fail if any dependencies are outdated
+        #[arg(long)]
+        fail_on_outdated: bool,
     },
     /// List all dependencies
     List,

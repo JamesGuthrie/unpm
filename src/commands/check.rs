@@ -21,6 +21,11 @@ enum CheckTask {
         local_sha256: String,
         filename: String,
     },
+    Outdated {
+        name: String,
+        current: String,
+        source: PackageSource,
+    },
 }
 
 enum CheckResult {
@@ -34,9 +39,14 @@ enum CheckResult {
         result: anyhow::Result<Option<String>>,
         local_sha256: String,
     },
+    Outdated {
+        name: String,
+        current: String,
+        latest: Option<String>,
+    },
 }
 
-pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
+pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Result<()> {
     let config = Config::load()?;
     let manifest = Manifest::load()?;
     let lockfile = Lockfile::load()?;
@@ -50,7 +60,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut errors: Vec<String> = Vec::new();
+    let mut integrity_errors: Vec<String> = Vec::new();
     let mut tasks: Vec<CheckTask> = Vec::new();
 
     // SHA verification against lockfile (local, synchronous)
@@ -58,7 +68,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
         let locked = match lockfile.dependencies.get(name) {
             Some(l) => l,
             None => {
-                errors.push(format!("{name}: not in lockfile, run `unpm add` first"));
+                integrity_errors.push(format!("  {name}: not in lockfile, run `unpm add` first"));
                 continue;
             }
         };
@@ -69,12 +79,12 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
             Ok(bytes) => {
                 let hash = Fetcher::hash(&bytes);
                 if hash != locked.sha256 {
-                    errors.push(format!("{name}: SHA mismatch for {}", locked.filename));
+                    integrity_errors.push(format!("  {name}: SHA mismatch for {}", locked.filename));
                 }
                 hash
             }
             Err(_) => {
-                errors.push(format!("{name}: vendored file not found ({})", file_path.display()));
+                integrity_errors.push(format!("  {name}: vendored file not found ({})", file_path.display()));
                 continue;
             }
         };
@@ -102,6 +112,15 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
             version: dep.version().to_string(),
             ignore_cves: dep.ignore_cves().to_vec(),
         });
+
+        // Queue outdated check
+        if let Ok(source) = PackageSource::from_manifest(name, dep.source()) {
+            tasks.push(CheckTask::Outdated {
+                name: name.clone(),
+                current: dep.version().to_string(),
+                source,
+            });
+        }
     }
 
     // Run CVE + CDN hash checks in parallel (up to 5 concurrent)
@@ -127,12 +146,34 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
                         }.await;
                         CheckResult::CdnHash { name, result, local_sha256 }
                     }
+                    CheckTask::Outdated { name, current, source } => {
+                        let latest = registry
+                            .get_package(&source)
+                            .await
+                            .ok()
+                            .and_then(|info| {
+                                info.tags.latest.or_else(|| {
+                                    let mut stable: Vec<_> = info.versions.iter()
+                                        .filter_map(|v| {
+                                            let sv = semver::Version::parse(&v.version).ok()?;
+                                            if sv.pre.is_empty() { Some((v.version.clone(), sv)) } else { None }
+                                        })
+                                        .collect();
+                                    stable.sort_by(|a, b| b.1.cmp(&a.1));
+                                    stable.into_iter().next().map(|(s, _)| s)
+                                })
+                            });
+                        CheckResult::Outdated { name, current, latest }
+                    }
                 }
             }
         })
         .buffer_unordered(5)
         .collect()
         .await;
+
+    let mut vulnerabilities: Vec<String> = Vec::new();
+    let mut outdated: Vec<String> = Vec::new();
 
     for result in results {
         match result {
@@ -146,44 +187,74 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
 
                         if !unignored.is_empty() && !allow_vulnerable {
                             for vuln in &unignored {
-                                errors.push(format!("{name}: {} \u{2014} {}", vuln.id, vuln.summary));
+                                vulnerabilities.push(format!("  {name}: {} \u{2014} {}", vuln.id, vuln.summary));
                             }
                         }
                     }
                     Err(e) => {
-                        errors.push(format!("{name}: could not check CVEs: {e}"));
+                        vulnerabilities.push(format!("  {name}: could not check CVEs: {e}"));
                     }
                 }
             }
             CheckResult::CdnHash { name, result, local_sha256 } => {
                 match result {
                     Ok(Some(cdn_hash)) => {
-                        // jsdelivr returns base64-encoded SHA-256
                         let cdn_hex = base64_to_hex(&cdn_hash);
                         if cdn_hex != local_sha256 {
-                            errors.push(format!("{name}: vendored file does not match CDN hash"));
+                            integrity_errors.push(format!("  {name}: vendored file does not match CDN hash"));
                         }
                     }
                     Ok(None) => {
-                        errors.push(format!("{name}: file not found on CDN for verification"));
+                        integrity_errors.push(format!("  {name}: file not found on CDN for verification"));
                     }
                     Err(e) => {
-                        errors.push(format!("{name}: could not verify against CDN: {e}"));
+                        integrity_errors.push(format!("  {name}: could not verify against CDN: {e}"));
+                    }
+                }
+            }
+            CheckResult::Outdated { name, current, latest } => {
+                if let Some(latest) = latest {
+                    if latest != current {
+                        outdated.push(format!("  {name}: {current} -> {latest}"));
                     }
                 }
             }
         }
     }
 
-    if errors.is_empty() {
-        println!("All checks passed.");
-    } else {
-        for err in &errors {
-            println!("{err}");
+    let mut has_errors = false;
+
+    if !integrity_errors.is_empty() {
+        println!("Integrity:");
+        for msg in &integrity_errors {
+            println!("{msg}");
         }
+        has_errors = true;
+    }
+
+    if !vulnerabilities.is_empty() {
+        println!("Vulnerabilities:");
+        for msg in &vulnerabilities {
+            println!("{msg}");
+        }
+        has_errors = true;
+    }
+
+    if !outdated.is_empty() {
+        println!("Outdated:");
+        for msg in &outdated {
+            println!("{msg}");
+        }
+        if fail_on_outdated {
+            has_errors = true;
+        }
+    }
+
+    if has_errors {
         anyhow::bail!("Check failed.");
     }
 
+    println!("All checks passed.");
     Ok(())
 }
 

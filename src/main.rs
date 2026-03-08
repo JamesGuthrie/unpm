@@ -12,8 +12,8 @@ async fn main() -> anyhow::Result<()> {
         Command::Install => {
             unpm::commands::install().await?;
         }
-        Command::Check { allow_vulnerable } => {
-            unpm::commands::check(allow_vulnerable).await?;
+        Command::Check { allow_vulnerable, fail_on_outdated } => {
+            unpm::commands::check(allow_vulnerable, fail_on_outdated).await?;
         }
         Command::List => {
             unpm::commands::list()?;
