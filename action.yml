@@ -1,0 +1,39 @@
+name: "unpm check"
+description: "Verify vendored dependencies: SHA integrity and CVE scanning"
+branding:
+  icon: "shield"
+  color: "green"
+
+inputs:
+  allow-vulnerable:
+    description: "Allow known vulnerabilities (not recommended)"
+    required: false
+    default: "false"
+  version:
+    description: "unpm version to use"
+    required: false
+    default: "latest"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install unpm
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          URL=$(curl -s https://api.github.com/repos/unpm/unpm/releases/latest | grep browser_download_url | grep linux-x86_64 | cut -d '"' -f 4)
+        else
+          URL="https://github.com/unpm/unpm/releases/download/v${VERSION}/unpm-linux-x86_64"
+        fi
+        curl -sSL "$URL" -o /usr/local/bin/unpm
+        chmod +x /usr/local/bin/unpm
+
+    - name: Run unpm check
+      shell: bash
+      run: |
+        ARGS="check"
+        if [ "${{ inputs.allow-vulnerable }}" = "true" ]; then
+          ARGS="$ARGS --allow-vulnerable"
+        fi
+        unpm $ARGS
