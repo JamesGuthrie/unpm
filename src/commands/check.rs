@@ -3,7 +3,7 @@ use crate::cve::CveChecker;
 use crate::fetch::Fetcher;
 use crate::lockfile::Lockfile;
 use crate::manifest::Manifest;
-use crate::registry::Registry;
+use crate::registry::{PackageSource, Registry};
 use futures::stream::{self, StreamExt};
 use std::path::Path;
 
@@ -23,7 +23,6 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
 
     let mut has_errors = false;
 
-    // SHA verification and CVE checking (sequential — need clear output ordering)
     for (name, dep) in &manifest.dependencies {
         println!("Checking {name}...");
 
@@ -55,9 +54,16 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
             }
         }
 
-        // CVE checking
+        // CVE checking — use the npm package name for OSV queries
+        // (GitHub packages won't have npm CVEs, but we check anyway)
+        let source = PackageSource::from_manifest(name, dep.source()).ok();
+        let cve_name = match &source {
+            Some(PackageSource::Npm(n)) => n.as_str(),
+            _ => name,
+        };
+
         let ignore_cves = dep.ignore_cves();
-        match cve_checker.check(name, dep.version()).await {
+        match cve_checker.check(cve_name, dep.version()).await {
             Ok(vulns) => {
                 let unignored: Vec<_> = vulns
                     .iter()
@@ -84,21 +90,32 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
     }
 
     // Freshness checks — parallel (up to 5 concurrent)
-    let dep_names: Vec<(&String, &str)> = manifest
+    let dep_entries: Vec<(&String, &str, Option<PackageSource>)> = manifest
         .dependencies
         .iter()
-        .map(|(name, dep)| (name, dep.version()))
+        .map(|(name, dep)| {
+            let source = PackageSource::from_manifest(name, dep.source()).ok();
+            (name, dep.version(), source)
+        })
         .collect();
 
-    let freshness_results: Vec<_> = stream::iter(dep_names)
-        .map(|(name, current_version)| {
+    let freshness_results: Vec<_> = stream::iter(dep_entries)
+        .map(|(name, current_version, source)| {
             let registry = &registry;
             async move {
-                let latest = registry
-                    .get_package(name)
-                    .await
-                    .ok()
-                    .and_then(|info| info.tags.latest);
+                let latest = if let Some(src) = &source {
+                    registry
+                        .get_package(src)
+                        .await
+                        .ok()
+                        .and_then(|info| {
+                            info.tags.latest.or_else(|| {
+                                info.versions.last().map(|v| v.version.clone())
+                            })
+                        })
+                } else {
+                    None
+                };
                 (name.clone(), current_version.to_string(), latest)
             }
         })

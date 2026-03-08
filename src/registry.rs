@@ -1,5 +1,79 @@
 use anyhow::{bail, Result};
 use serde::Deserialize;
+use std::fmt;
+
+/// Identifies where a package is hosted on jsdelivr.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PackageSource {
+    Npm(String),
+    GitHub { user: String, repo: String },
+}
+
+impl PackageSource {
+    /// Parse a package specifier: "gh:user/repo" for GitHub, anything else for npm.
+    pub fn parse(input: &str) -> Result<Self> {
+        if let Some(gh) = input.strip_prefix("gh:") {
+            let (user, repo) = gh
+                .split_once('/')
+                .ok_or_else(|| anyhow::anyhow!("GitHub source must be 'gh:user/repo', got '{input}'"))?;
+            if user.is_empty() || repo.is_empty() {
+                bail!("GitHub source must be 'gh:user/repo', got '{input}'");
+            }
+            Ok(Self::GitHub {
+                user: user.to_string(),
+                repo: repo.to_string(),
+            })
+        } else {
+            Ok(Self::Npm(input.to_string()))
+        }
+    }
+
+    /// The API path segment: "npm/htmx.org" or "gh/user/repo"
+    fn api_path(&self) -> String {
+        match self {
+            Self::Npm(name) => format!("npm/{name}"),
+            Self::GitHub { user, repo } => format!("gh/{user}/{repo}"),
+        }
+    }
+
+    /// The CDN path segment: "npm/htmx.org@2.0.4" or "gh/user/repo@1.0.0"
+    fn cdn_path(&self, version: &str) -> String {
+        match self {
+            Self::Npm(name) => format!("npm/{name}@{version}"),
+            Self::GitHub { user, repo } => format!("gh/{user}/{repo}@{version}"),
+        }
+    }
+
+    /// A display name suitable for use as manifest key.
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Npm(name) => name.clone(),
+            Self::GitHub { user, repo } => format!("gh:{user}/{repo}"),
+        }
+    }
+
+    /// The serialized source value for the manifest (None for npm since it's the default).
+    pub fn manifest_source(&self) -> Option<String> {
+        match self {
+            Self::Npm(_) => None,
+            Self::GitHub { user, repo } => Some(format!("gh:{user}/{repo}")),
+        }
+    }
+
+    /// Reconstruct a PackageSource from an optional manifest source field and the dep name.
+    pub fn from_manifest(name: &str, source: Option<&str>) -> Result<Self> {
+        match source {
+            Some(s) => Self::parse(s),
+            None => Ok(Self::Npm(name.to_string())),
+        }
+    }
+}
+
+impl fmt::Display for PackageSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.display_name())
+    }
+}
 
 pub struct Registry {
     client: reqwest::Client,
@@ -34,8 +108,6 @@ pub struct FileEntry {
     pub hash: String,
     pub size: u64,
 }
-
-// Raw API response types for deserialization
 
 #[derive(Deserialize)]
 struct ApiPackageInfo {
@@ -90,7 +162,8 @@ fn flatten_files(nodes: &[ApiFileNode], prefix: &str, out: &mut Vec<FileEntry>) 
     }
 }
 
-const BASE_URL: &str = "https://data.jsdelivr.com/v1/packages/npm";
+const API_BASE: &str = "https://data.jsdelivr.com/v1/packages";
+const CDN_BASE: &str = "https://cdn.jsdelivr.net";
 
 impl Registry {
     pub fn new() -> Self {
@@ -103,12 +176,12 @@ impl Registry {
         Self { client }
     }
 
-    pub async fn get_package(&self, name: &str) -> Result<PackageInfo> {
-        let url = format!("{BASE_URL}/{name}");
+    pub async fn get_package(&self, source: &PackageSource) -> Result<PackageInfo> {
+        let url = format!("{API_BASE}/{}", source.api_path());
         let resp = self.client.get(&url).send().await?;
 
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            bail!("Package not found: {name}");
+            bail!("Package not found: {source}");
         }
 
         let api: ApiPackageInfo = resp.error_for_status()?.json().await?;
@@ -126,12 +199,16 @@ impl Registry {
         })
     }
 
-    pub async fn get_package_files(&self, name: &str, version: &str) -> Result<PackageFiles> {
-        let url = format!("{BASE_URL}/{name}@{version}");
+    pub async fn get_package_files(
+        &self,
+        source: &PackageSource,
+        version: &str,
+    ) -> Result<PackageFiles> {
+        let url = format!("{API_BASE}/{}@{version}", source.api_path());
         let resp = self.client.get(&url).send().await?;
 
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            bail!("Package not found: {name}@{version}");
+            bail!("Package not found: {source}@{version}");
         }
 
         let api: ApiPackageFiles = resp.error_for_status()?.json().await?;
@@ -145,7 +222,7 @@ impl Registry {
         })
     }
 
-    pub fn file_url(name: &str, version: &str, file_path: &str) -> String {
-        format!("https://cdn.jsdelivr.net/npm/{name}@{version}/{file_path}")
+    pub fn file_url(source: &PackageSource, version: &str, file_path: &str) -> String {
+        format!("{CDN_BASE}/{}/{file_path}", source.cdn_path(version))
     }
 }

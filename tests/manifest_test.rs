@@ -90,3 +90,16 @@ some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
     assert!(matches!(manifest.dependencies["htmx.org"], Dependency::Short(_)));
     assert!(matches!(manifest.dependencies["d3"], Dependency::Extended { .. }));
 }
+
+#[test]
+fn parse_github_source() {
+    let toml = r#"
+[dependencies]
+"gh:alpinejs/alpine" = { version = "3.14.8", source = "gh:alpinejs/alpine", file = "packages/alpine/dist/cdn.min.js" }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let dep = &manifest.dependencies["gh:alpinejs/alpine"];
+    assert_eq!(dep.version(), "3.14.8");
+    assert_eq!(dep.source(), Some("gh:alpinejs/alpine"));
+    assert_eq!(dep.file(), Some("packages/alpine/dist/cdn.min.js"));
+}

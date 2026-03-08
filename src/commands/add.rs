@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::Registry;
+use crate::registry::{PackageSource, Registry};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Result<()> {
@@ -18,21 +18,22 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         bail!("Non-interactive mode requires both --version and --file flags");
     }
 
+    let source = PackageSource::parse(package)?;
     let client = reqwest::Client::new();
     let registry = Registry::with_client(client.clone());
     let fetcher = Fetcher::with_client(client);
 
     // Step 1: Look up package
-    println!("Looking up {package}...");
-    let pkg_info = registry.get_package(package).await?;
+    println!("Looking up {source}...");
+    let pkg_info = registry.get_package(&source).await?;
 
     // Step 2: Select version
     let selected_version = select_version(&pkg_info, version, interactive)?;
 
     // Step 3: Get file listing for selected version
-    println!("Fetching file list for {package}@{selected_version}...");
+    println!("Fetching file list for {source}@{selected_version}...");
     let pkg_files = registry
-        .get_package_files(package, &selected_version)
+        .get_package_files(&source, &selected_version)
         .await?;
 
     // Step 4: Select file
@@ -42,7 +43,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     let final_file = handle_minification(&pkg_files, &selected_file, interactive)?;
 
     // Step 6: Fetch the file
-    let url = Registry::file_url(package, &selected_version, &final_file);
+    let url = Registry::file_url(&source, &selected_version, &final_file);
     println!("Fetching {url}...");
     let result = fetcher.fetch(&url).await?;
 
@@ -53,17 +54,18 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         .to_string_lossy()
         .to_string();
 
-    // Namespace: package-name_filename (e.g., "htmx.org_htmx.min.js")
+    // Use the manifest key for namespacing
+    let manifest_key = source.display_name();
     let vendored_filename = format!(
         "{}_{}",
-        package.replace('/', "-"),
+        manifest_key.replace('/', "-").replace(':', "-"),
         original_filename
     );
 
     // Step 8: Confirm
     if interactive && version.is_none() {
         println!();
-        println!("  Package:  {package}");
+        println!("  Package:  {source}");
         println!("  Version:  {selected_version}");
         println!("  File:     {final_file}");
         println!("  Size:     {} bytes", result.size);
@@ -88,27 +90,30 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         .as_deref()
         .map(|d| d.strip_prefix('/').unwrap_or(d));
     let is_default = default_path == Some(final_file.as_str());
+    let manifest_source = source.manifest_source();
 
     // Step 10: Write manifest
     let mut manifest = Manifest::load()?;
 
-    let dep = if is_default {
+    let dep = if is_default && manifest_source.is_none() {
+        // Short form only for npm packages using the default file
         Dependency::Short(selected_version.clone())
     } else {
         Dependency::Extended {
             version: selected_version.clone(),
-            file: Some(final_file.clone()),
+            source: manifest_source,
+            file: if is_default { None } else { Some(final_file.clone()) },
             url: None,
             ignore_cves: Vec::new(),
         }
     };
-    manifest.dependencies.insert(package.to_string(), dep);
+    manifest.dependencies.insert(manifest_key.clone(), dep);
     manifest.save()?;
 
     // Step 11: Write lockfile
     let mut lockfile = Lockfile::load()?;
     lockfile.dependencies.insert(
-        package.to_string(),
+        manifest_key.clone(),
         LockedDependency {
             version: selected_version.clone(),
             url: url.clone(),
@@ -123,7 +128,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     let config = Config::load()?;
     vendor::place_file(Path::new(&config.output_dir), &vendored_filename, &result.bytes)?;
 
-    println!("Added {package}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
+    println!("Added {source}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
 
     Ok(())
 }
@@ -140,23 +145,31 @@ fn select_version(
         return Ok(v.to_string());
     }
 
-    let latest = pkg_info
+    // Use latest tag if available, otherwise most recent version in list
+    let default_version = pkg_info
         .tags
         .latest
         .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("No latest tag found for {}", pkg_info.name))?;
+        .or_else(|| pkg_info.versions.last().map(|v| v.version.as_str()))
+        .ok_or_else(|| anyhow::anyhow!("No versions found for {}", pkg_info.name))?;
 
     if !interactive {
-        return Ok(latest.to_string());
+        return Ok(default_version.to_string());
     }
 
-    let use_latest = Confirm::new()
-        .with_prompt(format!("Use latest version ({latest})?"))
+    let label = if pkg_info.tags.latest.is_some() {
+        format!("Use latest version ({default_version})?")
+    } else {
+        format!("Use most recent version ({default_version})?")
+    };
+
+    let use_default = Confirm::new()
+        .with_prompt(label)
         .default(true)
         .interact()?;
 
-    if use_latest {
-        return Ok(latest.to_string());
+    if use_default {
+        return Ok(default_version.to_string());
     }
 
     let versions: Vec<&str> = pkg_info
@@ -198,10 +211,13 @@ fn select_file(
     }
 
     if let Some(ref default) = default_path {
-        let items = &["Use default entry point", "Select file manually"];
+        let items = &[
+            format!("Use default entry point ({default})"),
+            "Select file manually".to_string(),
+        ];
         let selection = Select::new()
-            .with_prompt(format!("File selection (default: {default})"))
-            .items(items)
+            .with_prompt("File selection")
+            .items(&items[..])
             .default(0)
             .interact()?;
 

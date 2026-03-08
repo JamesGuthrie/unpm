@@ -8,6 +8,8 @@ pub enum Dependency {
     Extended {
         version: String,
         #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         url: Option<String>,
@@ -25,6 +27,13 @@ impl Dependency {
         match self {
             Dependency::Short(v) => v,
             Dependency::Extended { version, .. } => version,
+        }
+    }
+
+    pub fn source(&self) -> Option<&str> {
+        match self {
+            Dependency::Short(_) => None,
+            Dependency::Extended { source, .. } => source.as_deref(),
         }
     }
 
