@@ -32,6 +32,14 @@ pub enum Command {
     List,
     /// Show dependencies with newer versions available
     Outdated,
+    /// Update a dependency to a newer version
+    Update {
+        /// Package name (supports package@version syntax)
+        package: String,
+        /// Target version (default: latest)
+        #[arg(long)]
+        version: Option<String>,
+    },
     /// Remove a dependency
     Remove {
         /// Package name to remove
