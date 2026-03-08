@@ -65,7 +65,7 @@ lodash = { version = "4.17.21", file = "lodash.min.js", ignore-cves = ["GHSA-x5r
 | `unpm check` | Verify integrity, CVEs, and freshness |
 | `unpm list` | List all dependencies |
 | `unpm outdated` | Show dependencies with newer versions available |
-| `unpm update [package[@version]]` | Update one or all dependencies |
+| `unpm update [package[@version]]` | Update one or all dependencies (same major) |
 | `unpm remove <package>` | Remove a dependency |
 
 ### `unpm add`
@@ -96,13 +96,24 @@ unpm check --fail-on-outdated    # treat outdated deps as errors
 
 ### `unpm update`
 
-Updates dependencies within the same major version by default:
+Updates dependencies within the same major version by default. If a newer major version exists but can't be installed, unpm tells you:
+
+```
+htmx.org: 1.9.12 held back (2.0.7 available, use --latest to update across major versions)
+```
 
 ```sh
-unpm update                   # update all dependencies
-unpm update htmx.org          # update one dependency
-unpm update htmx.org@2.0.6   # cross major versions with explicit @version
+unpm update                   # update all (same major version)
+unpm update --latest          # update all to latest, crossing major versions
+unpm update htmx.org          # update one dependency (same major)
+unpm update htmx.org@3.0.0   # pin to an explicit version
 ```
+
+## Versioning
+
+The version in `unpm.toml` is the exact version that gets installed — there are no version ranges or specifiers. When you run `unpm update`, it upgrades to the latest version within the same major version (e.g. `1.9.12` → `1.9.14`, but not `1.9.12` → `2.0.0`). This keeps updates safe by default, since major version bumps typically indicate breaking changes.
+
+To update across major versions, use `unpm update --latest` or specify the version explicitly with `unpm update package@version`.
 
 ## Package Sources
 

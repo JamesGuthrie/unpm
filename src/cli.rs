@@ -42,6 +42,9 @@ pub enum Command {
         /// Target version (default: latest compatible)
         #[arg(long)]
         version: Option<String>,
+        /// Update to latest version, even across major versions
+        #[arg(long)]
+        latest: bool,
     },
     /// Remove a dependency
     Remove {

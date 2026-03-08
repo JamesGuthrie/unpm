@@ -8,7 +8,7 @@ use crate::manifest::{Dependency, Manifest};
 use crate::registry::{PackageSource, Registry};
 use crate::vendor;
 
-pub async fn update(package: Option<&str>, version: Option<&str>) -> Result<()> {
+pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) -> Result<()> {
     // Parse package@version syntax
     let (package, version) = match package {
         Some(pkg) => match version {
@@ -63,11 +63,27 @@ pub async fn update(package: Option<&str>, version: Option<&str>) -> Result<()> 
                     .map(|v| v.major);
 
                 match current_major {
-                    Some(major) => match latest_compatible(&pkg_info.versions, major) {
-                        Some(v) => v,
-                        None => continue,
-                    },
-                    None => {
+                    Some(major) if !latest => {
+                        match latest_compatible(&pkg_info.versions, major) {
+                            Some(v) => {
+                                // If already at latest compatible, check if a newer major exists
+                                if v == old_version {
+                                    if let Some(abs_latest) = latest_stable(&pkg_info.versions) {
+                                        if abs_latest != old_version {
+                                            println!(
+                                                "{name}: {old_version} held back \
+                                                 ({abs_latest} available, use --latest to update across major versions)"
+                                            );
+                                        }
+                                    }
+                                    continue;
+                                }
+                                v
+                            }
+                            None => continue,
+                        }
+                    }
+                    _ => {
                         match pkg_info
                             .tags
                             .latest
