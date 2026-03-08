@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
             unpm::commands::outdated().await?;
         }
         Command::Update { package, version } => {
-            unpm::commands::update(&package, version.as_deref()).await?;
+            unpm::commands::update(package.as_deref(), version.as_deref()).await?;
         }
         Command::Remove { package } => {
             unpm::commands::remove(&package)?;

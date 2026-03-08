@@ -35,11 +35,11 @@ pub enum Command {
     List,
     /// Show dependencies with newer versions available
     Outdated,
-    /// Update a dependency to a newer version
+    /// Update dependencies (all if no package specified)
     Update {
         /// Package name (supports package@version syntax)
-        package: String,
-        /// Target version (default: latest)
+        package: Option<String>,
+        /// Target version (default: latest compatible)
         #[arg(long)]
         version: Option<String>,
     },
