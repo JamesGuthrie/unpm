@@ -1,4 +1,5 @@
 pub mod config;
+pub mod cve;
 pub mod fetch;
 pub mod lockfile;
 pub mod manifest;
