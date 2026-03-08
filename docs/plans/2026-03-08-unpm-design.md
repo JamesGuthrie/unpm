@@ -16,7 +16,10 @@ project/
 
 ```toml
 output_dir = "static/vendor"
+canonical = true
 ```
+
+`canonical` (default: `true`) — when enabled, unpm manages the output directory exclusively. Files not tracked in the lockfile are removed after `add`, `install`, `update`, and `remove`.
 
 ### unpm.toml (dependency manifest)
 
@@ -52,10 +55,10 @@ The `filename` field tracks the vendored filename. Plain filenames are used by d
 
 - `unpm add <package[@version]>` — interactive flow to add a dependency
 - `unpm install` — fetch all deps per manifest + lockfile
-- `unpm check` — verify vendored files (lockfile SHA, CDN SHA, CVEs)
+- `unpm check` — verify vendored files (SHA, CDN hash, CVEs, outdated)
 - `unpm list` — list all dependencies
 - `unpm outdated` — show dependencies with newer versions available
-- `unpm update <package[@version]>` — update a dependency to latest or a specific version
+- `unpm update [package[@version]]` — update one or all dependencies
 - `unpm remove <package>` — remove a vendored dependency
 
 ## Package Sources
@@ -83,13 +86,16 @@ Non-interactive mode via flags: `unpm add htmx.org --version 2.0.7 --file dist/h
 
 ## `unpm update`
 
-Updates an existing dependency to a new version, preserving all other settings (file path, ignore-cves, etc.).
+Updates dependencies, preserving file path, ignore-cves, and other settings.
 
-- `unpm update htmx.org` — update to latest stable version
+- `unpm update` — update all dependencies
+- `unpm update htmx.org` — update a single dependency
 - `unpm update htmx.org@2.0.6` — update to a specific version
 - `unpm update htmx.org --version 2.0.6` — same, with flag syntax
 
-The file path is extracted from the existing lockfile URL, so the same file within the package is fetched at the new version. Manifest, lockfile, and vendored file are all updated in place.
+By default, updates stay within the same major version (e.g. 3.4.1 → 3.7.1, not 4.0.0). To cross major versions, specify the target version explicitly with `@version` or `--version`.
+
+The file path is extracted from the existing lockfile URL, so the same file within the package is fetched at the new version.
 
 ## Security & Verification
 
@@ -115,9 +121,9 @@ The file path is extracted from the existing lockfile URL, so the same file with
 
 ### Freshness checking
 
-- `unpm outdated` queries jsdelivr for the latest version of each dependency
+- `unpm check` reports outdated dependencies (informational by default, `--fail-on-outdated` to fail)
+- `unpm outdated` provides the same check as a standalone command
 - Uses semver parsing to find the highest stable (non-prerelease) version
-- Reports outdated deps (informational only)
 
 ### Typosquatting prevention
 

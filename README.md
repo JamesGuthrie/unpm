@@ -31,10 +31,11 @@ unpm install
 unpm check
 ```
 
-Files are vendored into `static/vendor/` by default. Configure the output directory in `.unpm.toml`:
+Files are vendored into `static/vendor/` by default. Configure in `.unpm.toml`:
 
 ```toml
 output_dir = "assets/vendor"
+canonical = true  # remove untracked files from output dir (default)
 ```
 
 ## Manifest
@@ -61,10 +62,10 @@ lodash = { version = "4.17.21", file = "lodash.min.js", ignore-cves = ["GHSA-x5r
 |---------|-------------|
 | `unpm add <package[@version]>` | Add a dependency (interactive) |
 | `unpm install` | Fetch all dependencies |
-| `unpm check` | Verify SHA integrity, cross-check against CDN, scan for CVEs |
+| `unpm check` | Verify integrity, CVEs, and freshness |
 | `unpm list` | List all dependencies |
 | `unpm outdated` | Show dependencies with newer versions available |
-| `unpm update <package[@version]>` | Update a dependency |
+| `unpm update [package[@version]]` | Update one or all dependencies |
 | `unpm remove <package>` | Remove a dependency |
 
 ### `unpm add`
@@ -79,26 +80,28 @@ unpm add htmx.org --version 2.0.7 --file dist/htmx.min.js
 
 ### `unpm check`
 
-Runs three verifications per dependency:
+Runs four checks per dependency:
 
 1. **Lockfile SHA** -- vendored file matches the hash recorded at add time
 2. **CDN SHA** -- vendored file matches the hash jsdelivr currently reports (independent second source)
 3. **CVE scan** -- no known vulnerabilities via [OSV.dev](https://osv.dev/)
+4. **Freshness** -- whether newer versions are available
 
-Exits non-zero if any check fails. Only failures are printed.
+Output is grouped by category (Integrity, Vulnerabilities, Outdated). Only problems are printed.
 
 ```sh
-# Allow known vulnerabilities (not recommended)
-unpm check --allow-vulnerable
+unpm check --allow-vulnerable    # ignore CVEs
+unpm check --fail-on-outdated    # treat outdated deps as errors
 ```
 
 ### `unpm update`
 
-Updates an existing dependency, preserving file path and other settings:
+Updates dependencies within the same major version by default:
 
 ```sh
-unpm update htmx.org          # update to latest
-unpm update htmx.org@2.0.6    # update to specific version
+unpm update                   # update all dependencies
+unpm update htmx.org          # update one dependency
+unpm update htmx.org@2.0.6   # cross major versions with explicit @version
 ```
 
 ## Package Sources
