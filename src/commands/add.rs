@@ -12,6 +12,15 @@ use crate::registry::{PackageSource, Registry};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Result<()> {
+    // Parse package@version syntax (last @ wins, to handle gh:user/repo@version)
+    let (package, version) = match version {
+        Some(_) => (package, version),
+        None => match package.rsplit_once('@') {
+            Some((pkg, ver)) if !pkg.is_empty() && !ver.is_empty() => (pkg, Some(ver)),
+            _ => (package, None),
+        },
+    };
+
     let interactive = std::io::stdin().is_terminal();
 
     if !interactive && (version.is_none() || file.is_none()) {
