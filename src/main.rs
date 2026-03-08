@@ -15,6 +15,9 @@ async fn main() -> anyhow::Result<()> {
         Command::Check { allow_vulnerable } => {
             unpm::commands::check(allow_vulnerable).await?;
         }
+        Command::List => {
+            unpm::commands::list()?;
+        }
         Command::Remove { package } => {
             unpm::commands::remove(&package)?;
         }

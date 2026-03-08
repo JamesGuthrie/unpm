@@ -28,6 +28,8 @@ pub enum Command {
         #[arg(long)]
         allow_vulnerable: bool,
     },
+    /// List all dependencies
+    List,
     /// Remove a dependency
     Remove {
         /// Package name to remove
