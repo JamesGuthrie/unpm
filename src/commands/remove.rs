@@ -23,6 +23,16 @@ pub fn remove(package: &str) -> anyhow::Result<()> {
     manifest.save()?;
     lockfile.save()?;
 
+    if config.canonical {
+        let output_dir = Path::new(&config.output_dir);
+        let known: std::collections::HashSet<&str> = lockfile
+            .dependencies
+            .values()
+            .map(|l| l.filename.as_str())
+            .collect();
+        vendor::clean(output_dir, &known)?;
+    }
+
     println!("Removed {package}");
     Ok(())
 }

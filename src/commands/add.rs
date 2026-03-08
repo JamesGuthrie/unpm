@@ -141,7 +141,17 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
 
     // Step 12: Place file
     let config = Config::load()?;
-    vendor::place_file(Path::new(&config.output_dir), &vendored_filename, &result.bytes)?;
+    let output_dir = Path::new(&config.output_dir);
+    vendor::place_file(output_dir, &vendored_filename, &result.bytes)?;
+
+    if config.canonical {
+        let known: std::collections::HashSet<&str> = lockfile
+            .dependencies
+            .values()
+            .map(|l| l.filename.as_str())
+            .collect();
+        vendor::clean(output_dir, &known)?;
+    }
 
     println!("Added {source}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
 
