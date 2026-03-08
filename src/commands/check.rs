@@ -110,7 +110,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
                         .ok()
                         .and_then(|info| {
                             info.tags.latest.or_else(|| {
-                                info.versions.last().map(|v| v.version.clone())
+                                info.versions.first().map(|v| v.version.clone())
                             })
                         })
                 } else {

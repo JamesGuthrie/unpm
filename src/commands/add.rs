@@ -150,7 +150,7 @@ fn select_version(
         .tags
         .latest
         .as_deref()
-        .or_else(|| pkg_info.versions.last().map(|v| v.version.as_str()))
+        .or_else(|| pkg_info.versions.first().map(|v| v.version.as_str()))
         .ok_or_else(|| anyhow::anyhow!("No versions found for {}", pkg_info.name))?;
 
     if !interactive {
@@ -175,7 +175,6 @@ fn select_version(
     let versions: Vec<&str> = pkg_info
         .versions
         .iter()
-        .rev()
         .map(|v| v.version.as_str())
         .collect();
 
