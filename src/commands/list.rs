@@ -17,7 +17,7 @@ pub fn list() -> anyhow::Result<()> {
             .get(name)
             .map(|l| l.filename.as_str())
             .unwrap_or("(not installed)");
-        println!("{name}@{version}  {file_info}");
+        println!("{file_info}: {name}@{version}");
     }
 
     Ok(())
