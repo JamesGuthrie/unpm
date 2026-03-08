@@ -48,6 +48,10 @@ impl CveChecker {
         }
     }
 
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+
     pub async fn check(&self, package_name: &str, version: &str) -> Result<Vec<Vulnerability>> {
         let body = ApiRequest {
             package: ApiPackage {

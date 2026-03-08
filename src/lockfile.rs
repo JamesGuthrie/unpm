@@ -13,6 +13,7 @@ pub struct LockedDependency {
     pub url: String,
     pub sha256: String,
     pub size: u64,
+    pub filename: String,
 }
 
 impl Lockfile {

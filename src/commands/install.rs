@@ -11,7 +11,8 @@ pub async fn install() -> anyhow::Result<()> {
     let manifest = Manifest::load()?;
     let lockfile = Lockfile::load()?;
     let output_dir = Path::new(&config.output_dir);
-    let fetcher = Fetcher::new();
+    let client = reqwest::Client::new();
+    let fetcher = Fetcher::with_client(client);
 
     if manifest.dependencies.is_empty() {
         println!("No dependencies to install.");
@@ -26,7 +27,7 @@ pub async fn install() -> anyhow::Result<()> {
     );
     pb.set_message("Installing");
 
-    for (name, _dep) in &manifest.dependencies {
+    for (name, dep) in &manifest.dependencies {
         let locked = lockfile
             .dependencies
             .get(name)
@@ -36,7 +37,9 @@ pub async fn install() -> anyhow::Result<()> {
                 )
             })?;
 
-        let result = fetcher.fetch(&locked.url).await?;
+        // Use custom URL from manifest if specified, otherwise use lockfile URL
+        let url = dep.url().unwrap_or(&locked.url);
+        let result = fetcher.fetch(url).await?;
 
         if !Fetcher::verify(&result.bytes, &locked.sha256) {
             anyhow::bail!(
@@ -46,8 +49,7 @@ pub async fn install() -> anyhow::Result<()> {
             );
         }
 
-        let filename = locked.url.rsplit('/').next().unwrap_or(name);
-        vendor::place_file(output_dir, filename, &result.bytes)?;
+        vendor::place_file(output_dir, &locked.filename, &result.bytes)?;
         pb.inc(1);
     }
 

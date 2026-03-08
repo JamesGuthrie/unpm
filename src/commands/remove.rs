@@ -17,9 +17,7 @@ pub fn remove(package: &str) -> anyhow::Result<()> {
     }
 
     if let Some(locked) = lockfile.dependencies.remove(package) {
-        if let Some(filename) = locked.url.rsplit('/').next() {
-            vendor::remove_file(Path::new(&config.output_dir), filename)?;
-        }
+        vendor::remove_file(Path::new(&config.output_dir), &locked.filename)?;
     }
 
     manifest.save()?;

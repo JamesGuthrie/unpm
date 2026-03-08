@@ -18,6 +18,10 @@ impl Fetcher {
         }
     }
 
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+
     pub async fn fetch(&self, url: &str) -> Result<FetchResult> {
         let bytes = self
             .client

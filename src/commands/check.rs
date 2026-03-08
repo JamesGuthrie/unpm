@@ -4,6 +4,7 @@ use crate::fetch::Fetcher;
 use crate::lockfile::Lockfile;
 use crate::manifest::Manifest;
 use crate::registry::Registry;
+use futures::stream::{self, StreamExt};
 use std::path::Path;
 
 pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
@@ -11,8 +12,9 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
     let manifest = Manifest::load()?;
     let lockfile = Lockfile::load()?;
     let output_dir = Path::new(&config.output_dir);
-    let cve_checker = CveChecker::new();
-    let registry = Registry::new();
+    let client = reqwest::Client::new();
+    let cve_checker = CveChecker::with_client(client.clone());
+    let registry = Registry::with_client(client);
 
     if manifest.dependencies.is_empty() {
         println!("No dependencies to check.");
@@ -21,6 +23,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
 
     let mut has_errors = false;
 
+    // SHA verification and CVE checking (sequential — need clear output ordering)
     for (name, dep) in &manifest.dependencies {
         println!("Checking {name}...");
 
@@ -35,8 +38,7 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
         };
 
         // SHA verification
-        let filename = locked.url.rsplit('/').next().unwrap_or(name);
-        let file_path = output_dir.join(filename);
+        let file_path = output_dir.join(&locked.filename);
 
         match std::fs::read(&file_path) {
             Ok(bytes) => {
@@ -78,24 +80,50 @@ pub async fn check(allow_vulnerable: bool) -> anyhow::Result<()> {
             }
         }
 
-        // Freshness check
-        match registry.get_package(name).await {
-            Ok(info) => {
-                if let Some(latest) = &info.tags.latest {
-                    if latest != dep.version() {
-                        println!("  \u{2139} Newer version available: {latest}");
-                    }
-                }
-            }
-            Err(_) => {}
-        }
+        println!();
+    }
 
+    // Freshness checks — parallel (up to 5 concurrent)
+    let dep_names: Vec<(&String, &str)> = manifest
+        .dependencies
+        .iter()
+        .map(|(name, dep)| (name, dep.version()))
+        .collect();
+
+    let freshness_results: Vec<_> = stream::iter(dep_names)
+        .map(|(name, current_version)| {
+            let registry = &registry;
+            async move {
+                let latest = registry
+                    .get_package(name)
+                    .await
+                    .ok()
+                    .and_then(|info| info.tags.latest);
+                (name.clone(), current_version.to_string(), latest)
+            }
+        })
+        .buffer_unordered(5)
+        .collect()
+        .await;
+
+    let mut has_outdated = false;
+    for (name, current, latest) in &freshness_results {
+        if let Some(latest) = latest {
+            if latest != current {
+                if !has_outdated {
+                    println!("Outdated dependencies:");
+                    has_outdated = true;
+                }
+                println!("  {name}: {current} -> {latest}");
+            }
+        }
+    }
+    if has_outdated {
         println!();
     }
 
     if has_errors {
-        println!("Check failed.");
-        std::process::exit(1);
+        anyhow::bail!("Check failed.");
     }
 
     println!("All checks passed.");

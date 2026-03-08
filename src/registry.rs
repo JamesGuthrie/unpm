@@ -99,6 +99,10 @@ impl Registry {
         }
     }
 
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+
     pub async fn get_package(&self, name: &str) -> Result<PackageInfo> {
         let url = format!("{BASE_URL}/{name}");
         let resp = self.client.get(&url).send().await?;

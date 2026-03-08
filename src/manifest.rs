@@ -57,8 +57,15 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load() -> anyhow::Result<Self> {
-        let contents = std::fs::read_to_string("unpm.toml")?;
-        Ok(toml::from_str(&contents)?)
+        let path = std::path::Path::new("unpm.toml");
+        if path.exists() {
+            let contents = std::fs::read_to_string(path)?;
+            Ok(toml::from_str(&contents)?)
+        } else {
+            Ok(Self {
+                dependencies: BTreeMap::new(),
+            })
+        }
     }
 
     pub fn save(&self) -> anyhow::Result<()> {

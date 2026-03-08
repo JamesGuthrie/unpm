@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{bail, Result};
@@ -12,13 +12,15 @@ use crate::registry::Registry;
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Result<()> {
-    let interactive = atty::is(atty::Stream::Stdin);
+    let interactive = std::io::stdin().is_terminal();
 
     if !interactive && (version.is_none() || file.is_none()) {
         bail!("Non-interactive mode requires both --version and --file flags");
     }
 
-    let registry = Registry::new();
+    let client = reqwest::Client::new();
+    let registry = Registry::with_client(client.clone());
+    let fetcher = Fetcher::with_client(client);
 
     // Step 1: Look up package
     println!("Looking up {package}...");
@@ -42,16 +44,23 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     // Step 6: Fetch the file
     let url = Registry::file_url(package, &selected_version, &final_file);
     println!("Fetching {url}...");
-    let fetcher = Fetcher::new();
     let result = fetcher.fetch(&url).await?;
 
-    // Step 7: Confirm
-    let filename = Path::new(&final_file)
+    // Step 7: Build vendored filename (namespaced to avoid collisions)
+    let original_filename = Path::new(&final_file)
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
 
+    // Namespace: package-name_filename (e.g., "htmx.org_htmx.min.js")
+    let vendored_filename = format!(
+        "{}_{}",
+        package.replace('/', "-"),
+        original_filename
+    );
+
+    // Step 8: Confirm
     if interactive && version.is_none() {
         println!();
         println!("  Package:  {package}");
@@ -59,6 +68,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         println!("  File:     {final_file}");
         println!("  Size:     {} bytes", result.size);
         println!("  SHA-256:  {}", result.sha256);
+        println!("  Saved as: {vendored_filename}");
         println!();
 
         let confirm = Confirm::new()
@@ -72,17 +82,15 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         }
     }
 
-    // Step 8: Determine if selected file is the default entry point
+    // Step 9: Determine if selected file is the default entry point
     let default_path = pkg_files
         .default
         .as_deref()
         .map(|d| d.strip_prefix('/').unwrap_or(d));
     let is_default = default_path == Some(final_file.as_str());
 
-    // Step 9: Write manifest
-    let mut manifest = Manifest::load().unwrap_or_else(|_| Manifest {
-        dependencies: BTreeMap::new(),
-    });
+    // Step 10: Write manifest
+    let mut manifest = Manifest::load()?;
 
     let dep = if is_default {
         Dependency::Short(selected_version.clone())
@@ -97,7 +105,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     manifest.dependencies.insert(package.to_string(), dep);
     manifest.save()?;
 
-    // Step 10: Write lockfile
+    // Step 11: Write lockfile
     let mut lockfile = Lockfile::load()?;
     lockfile.dependencies.insert(
         package.to_string(),
@@ -106,15 +114,16 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
             url: url.clone(),
             sha256: result.sha256.clone(),
             size: result.size,
+            filename: vendored_filename.clone(),
         },
     );
     lockfile.save()?;
 
-    // Step 11: Place file
+    // Step 12: Place file
     let config = Config::load()?;
-    vendor::place_file(Path::new(&config.output_dir), &filename, &result.bytes)?;
+    vendor::place_file(Path::new(&config.output_dir), &vendored_filename, &result.bytes)?;
 
-    println!("Added {package}@{selected_version} -> {}/{filename}", config.output_dir);
+    println!("Added {package}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
 
     Ok(())
 }
@@ -125,7 +134,6 @@ fn select_version(
     interactive: bool,
 ) -> Result<String> {
     if let Some(v) = version_flag {
-        // Validate the version exists
         if !pkg_info.versions.iter().any(|vi| vi.version == v) {
             bail!("Version {v} not found for {}", pkg_info.name);
         }
@@ -151,7 +159,6 @@ fn select_version(
         return Ok(latest.to_string());
     }
 
-    // Show version picker (most recent first, jsdelivr returns oldest-first)
     let versions: Vec<&str> = pkg_info
         .versions
         .iter()
@@ -203,7 +210,6 @@ fn select_file(
         }
     }
 
-    // Manual file picker
     let file_labels: Vec<String> = pkg_files
         .files
         .iter()
@@ -230,7 +236,6 @@ fn handle_minification(
 
     let file_paths: Vec<&str> = pkg_files.files.iter().map(|f| f.path.as_str()).collect();
 
-    // Check if the selected file has a minified/unminified counterpart
     let counterpart = find_min_counterpart(selected_file, &file_paths);
 
     if let Some((min_file, full_file)) = counterpart {
@@ -256,8 +261,6 @@ fn handle_minification(
     Ok(selected_file.to_string())
 }
 
-/// Given a file path, checks if both `.min.ext` and `.ext` versions exist.
-/// Returns Some((minified_path, unminified_path)) if both exist.
 fn find_min_counterpart<'a>(
     selected: &str,
     all_files: &[&'a str],
@@ -266,7 +269,6 @@ fn find_min_counterpart<'a>(
         let min_ext = format!(".min{ext}");
 
         if selected.ends_with(&min_ext) {
-            // Selected is minified — check if unminified exists
             let unminified = format!(
                 "{}{ext}",
                 &selected[..selected.len() - min_ext.len()]
@@ -275,7 +277,6 @@ fn find_min_counterpart<'a>(
                 return Some((selected.to_string(), unminified));
             }
         } else if selected.ends_with(ext) {
-            // Selected is unminified — check if minified exists
             let minified = format!(
                 "{}{min_ext}",
                 &selected[..selected.len() - ext.len()]
