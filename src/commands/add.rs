@@ -54,13 +54,20 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         .to_string_lossy()
         .to_string();
 
-    // Use the manifest key for namespacing
     let manifest_key = source.display_name();
-    let vendored_filename = format!(
-        "{}_{}",
-        manifest_key.replace('/', "-").replace(':', "-"),
-        original_filename
-    );
+
+    // Use plain filename unless it would collide with an existing vendored file
+    let lockfile = Lockfile::load()?;
+    let has_collision = lockfile.dependencies.values().any(|l| l.filename == original_filename);
+    let vendored_filename = if has_collision {
+        format!(
+            "{}_{}",
+            manifest_key.replace('/', "-").replace(':', "-"),
+            original_filename
+        )
+    } else {
+        original_filename.clone()
+    };
 
     // Step 8: Confirm
     if interactive && version.is_none() {
