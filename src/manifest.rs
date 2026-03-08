@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -59,6 +60,20 @@ impl Dependency {
     }
 }
 
+/// Quote a TOML key if it contains characters that require quoting.
+fn toml_key(key: &str) -> String {
+    if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        key.to_string()
+    } else {
+        format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
+/// Escape a TOML string value.
+fn toml_string(val: &str) -> String {
+    format!("\"{}\"", val.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
     pub dependencies: BTreeMap<String, Dependency>,
@@ -78,8 +93,42 @@ impl Manifest {
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
-        let contents = toml::to_string_pretty(self)?;
-        std::fs::write("unpm.toml", contents)?;
+        let mut out = String::new();
+        writeln!(out, "[dependencies]")?;
+
+        for (name, dep) in &self.dependencies {
+            let key = toml_key(name);
+            match dep {
+                Dependency::Short(version) => {
+                    writeln!(out, "{key} = {}", toml_string(version))?;
+                }
+                Dependency::Extended {
+                    version,
+                    source,
+                    file,
+                    url,
+                    ignore_cves,
+                } => {
+                    let mut fields = vec![format!("version = {}", toml_string(version))];
+                    if let Some(s) = source {
+                        fields.push(format!("source = {}", toml_string(s)));
+                    }
+                    if let Some(f) = file {
+                        fields.push(format!("file = {}", toml_string(f)));
+                    }
+                    if let Some(u) = url {
+                        fields.push(format!("url = {}", toml_string(u)));
+                    }
+                    if !ignore_cves.is_empty() {
+                        let cves: Vec<String> = ignore_cves.iter().map(|c| toml_string(c)).collect();
+                        fields.push(format!("ignore-cves = [{}]", cves.join(", ")));
+                    }
+                    writeln!(out, "{key} = {{ {} }}", fields.join(", "))?;
+                }
+            }
+        }
+
+        std::fs::write("unpm.toml", out)?;
         Ok(())
     }
 }

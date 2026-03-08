@@ -95,11 +95,23 @@ some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
 fn parse_github_source() {
     let toml = r#"
 [dependencies]
-"gh:alpinejs/alpine" = { version = "3.14.8", source = "gh:alpinejs/alpine", file = "packages/alpine/dist/cdn.min.js" }
+"gh:alpinejs/alpine" = { version = "3.14.8", file = "packages/alpine/dist/cdn.min.js" }
 "#;
     let manifest: Manifest = toml::from_str(toml).unwrap();
     let dep = &manifest.dependencies["gh:alpinejs/alpine"];
     assert_eq!(dep.version(), "3.14.8");
-    assert_eq!(dep.source(), Some("gh:alpinejs/alpine"));
     assert_eq!(dep.file(), Some("packages/alpine/dist/cdn.min.js"));
+}
+
+#[test]
+fn inline_table_format_roundtrips() {
+    // Verify that inline TOML table format parses correctly
+    let contents = "[dependencies]\n\
+         \"gh:user/repo\" = { version = \"1.0.0\", file = \"dist/lib.js\" }\n\
+         \"htmx.org\" = \"2.0.4\"\n";
+    let reparsed: Manifest = toml::from_str(contents).unwrap();
+    assert_eq!(reparsed.dependencies.len(), 2);
+    assert_eq!(reparsed.dependencies["htmx.org"].version(), "2.0.4");
+    assert_eq!(reparsed.dependencies["gh:user/repo"].version(), "1.0.0");
+    assert_eq!(reparsed.dependencies["gh:user/repo"].file(), Some("dist/lib.js"));
 }

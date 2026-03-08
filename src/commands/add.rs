@@ -90,19 +90,18 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         .as_deref()
         .map(|d| d.strip_prefix('/').unwrap_or(d));
     let is_default = default_path == Some(final_file.as_str());
-    let manifest_source = source.manifest_source();
 
     // Step 10: Write manifest
+    // Source is inferred from key name (gh: prefix), no explicit source field needed
     let mut manifest = Manifest::load()?;
 
-    let dep = if is_default && manifest_source.is_none() {
-        // Short form only for npm packages using the default file
+    let dep = if is_default {
         Dependency::Short(selected_version.clone())
     } else {
         Dependency::Extended {
             version: selected_version.clone(),
-            source: manifest_source,
-            file: if is_default { None } else { Some(final_file.clone()) },
+            source: None,
+            file: Some(final_file.clone()),
             url: None,
             ignore_cves: Vec::new(),
         }

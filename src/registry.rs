@@ -60,12 +60,15 @@ impl PackageSource {
         }
     }
 
-    /// Reconstruct a PackageSource from an optional manifest source field and the dep name.
+    /// Reconstruct a PackageSource from the manifest key name.
+    /// Keys starting with "gh:" are GitHub packages, everything else is npm.
     pub fn from_manifest(name: &str, source: Option<&str>) -> Result<Self> {
-        match source {
-            Some(s) => Self::parse(s),
-            None => Ok(Self::Npm(name.to_string())),
+        // Explicit source field takes precedence (backwards compat)
+        if let Some(s) = source {
+            return Self::parse(s);
         }
+        // Otherwise infer from key name
+        Self::parse(name)
     }
 }
 
