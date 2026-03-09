@@ -1,5 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use sha2::{Digest, Sha256};
+
+/// 50 MB — no vendored static asset should be anywhere near this.
+const MAX_RESPONSE_SIZE: u64 = 50 * 1024 * 1024;
 
 pub struct Fetcher {
     client: reqwest::Client,
@@ -29,15 +32,27 @@ impl Fetcher {
     }
 
     pub async fn fetch(&self, url: &str) -> Result<FetchResult> {
-        let bytes = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await?
-            .to_vec();
+        let response = self.client.get(url).send().await?.error_for_status()?;
+
+        if let Some(len) = response.content_length() {
+            if len > MAX_RESPONSE_SIZE {
+                bail!(
+                    "Response too large ({} bytes, max {}). Aborting download from {url}",
+                    len,
+                    MAX_RESPONSE_SIZE
+                );
+            }
+        }
+
+        let bytes = response.bytes().await?.to_vec();
+
+        if bytes.len() as u64 > MAX_RESPONSE_SIZE {
+            bail!(
+                "Response too large ({} bytes, max {}). Aborting download from {url}",
+                bytes.len(),
+                MAX_RESPONSE_SIZE
+            );
+        }
 
         let sha256 = Self::hash(&bytes);
         let size = bytes.len() as u64;
