@@ -19,6 +19,8 @@ runs:
   steps:
     - name: Install unpm
       shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
       run: |
         ARCH=$(uname -m)
         case "$ARCH" in
@@ -26,7 +28,6 @@ runs:
           aarch64) PLATFORM="linux-aarch64" ;;
           *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
         esac
-        VERSION="${{ inputs.version }}"
         if [ "$VERSION" = "latest" ]; then
           URL=$(curl -s https://api.github.com/repos/unpm/unpm/releases/latest \
             | grep browser_download_url \
@@ -40,9 +41,11 @@ runs:
 
     - name: Run unpm check
       shell: bash
+      env:
+        ALLOW_VULNERABLE: ${{ inputs.allow-vulnerable }}
       run: |
         ARGS="check"
-        if [ "${{ inputs.allow-vulnerable }}" = "true" ]; then
+        if [ "$ALLOW_VULNERABLE" = "true" ]; then
           ARGS="$ARGS --allow-vulnerable"
         fi
         unpm $ARGS
