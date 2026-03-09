@@ -1489,9 +1489,9 @@ runs:
       run: |
         VERSION="${{ inputs.version }}"
         if [ "$VERSION" = "latest" ]; then
-          URL=$(curl -s https://api.github.com/repos/unpm/unpm/releases/latest | grep browser_download_url | grep linux-x86_64 | cut -d '"' -f 4)
+          URL=$(curl -s https://api.github.com/repos/JamesGuthrie/unpm/releases/latest | grep browser_download_url | grep linux-x86_64 | cut -d '"' -f 4)
         else
-          URL="https://github.com/unpm/unpm/releases/download/v${VERSION}/unpm-linux-x86_64"
+          URL="https://github.com/JamesGuthrie/unpm/releases/download/v${VERSION}/unpm-linux-x86_64"
         fi
         curl -sSL "$URL" -o /usr/local/bin/unpm
         chmod +x /usr/local/bin/unpm

@@ -29,12 +29,12 @@ runs:
           *) echo "Unsupported architecture: $ARCH" && exit 1 ;;
         esac
         if [ "$VERSION" = "latest" ]; then
-          URL=$(curl -s https://api.github.com/repos/unpm/unpm/releases/latest \
+          URL=$(curl -s https://api.github.com/repos/JamesGuthrie/unpm/releases/latest \
             | grep browser_download_url \
             | grep "unpm-${PLATFORM}" \
             | cut -d '"' -f 4)
         else
-          URL="https://github.com/unpm/unpm/releases/download/v${VERSION}/unpm-${PLATFORM}"
+          URL="https://github.com/JamesGuthrie/unpm/releases/download/v${VERSION}/unpm-${PLATFORM}"
         fi
         curl -sSL "$URL" -o /usr/local/bin/unpm
         chmod +x /usr/local/bin/unpm

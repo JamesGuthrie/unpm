@@ -6,7 +6,7 @@ unpm fetches versioned files from npm and GitHub packages via [jsdelivr](https:/
 
 ## Install
 
-Download a prebuilt binary from [releases](https://github.com/unpm/unpm/releases), or build from source:
+Download a prebuilt binary from [releases](https://github.com/JamesGuthrie/unpm/releases), or build from source:
 
 ```
 cargo install --path .
@@ -138,7 +138,7 @@ Package names must be exact. No fuzzy matching or alias resolution -- this preve
 Add to your CI workflow to verify vendored dependencies on every push:
 
 ```yaml
-- uses: unpm/action@v1
+- uses: JamesGuthrie/unpm@v1
 ```
 
 The action downloads the `unpm` binary and runs `unpm check`. It exits non-zero on SHA mismatches or known vulnerabilities.
@@ -161,5 +161,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: unpm/action@v1
+      - uses: JamesGuthrie/unpm@v1
 ```
