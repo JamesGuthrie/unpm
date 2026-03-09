@@ -198,11 +198,14 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
             }
             CheckResult::CdnHash { name, result, local_sha256 } => {
                 match result {
-                    Ok(Some(cdn_hash)) => {
-                        let cdn_hex = base64_to_hex(&cdn_hash);
-                        if cdn_hex != local_sha256 {
+                    Ok(Some(cdn_hash)) => match base64_to_hex(&cdn_hash) {
+                        Some(cdn_hex) if cdn_hex != local_sha256 => {
                             integrity_errors.push(format!("  {name}: vendored file does not match CDN hash"));
                         }
+                        None => {
+                            integrity_errors.push(format!("  {name}: could not decode CDN hash (invalid base64)"));
+                        }
+                        _ => {}
                     }
                     Ok(None) => {
                         integrity_errors.push(format!("  {name}: file not found on CDN for verification"));
@@ -257,10 +260,10 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
     Ok(())
 }
 
-fn base64_to_hex(b64: &str) -> String {
+fn base64_to_hex(b64: &str) -> Option<String> {
     use base64::Engine;
-    match base64::engine::general_purpose::STANDARD.decode(b64) {
-        Ok(bytes) => hex::encode(bytes),
-        Err(_) => String::new(),
-    }
+    base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .ok()
+        .map(|bytes| hex::encode(bytes))
 }
