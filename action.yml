@@ -37,7 +37,14 @@ runs:
           URL="https://github.com/JamesGuthrie/unpm/releases/download/v${VERSION}/unpm-${PLATFORM}"
         fi
         curl -sSL "$URL" -o /usr/local/bin/unpm
-        chmod +x /usr/local/bin/unpm
+
+    - name: Verify attestation
+      shell: bash
+      run: gh attestation verify /usr/local/bin/unpm --repo JamesGuthrie/unpm
+
+    - name: Make unpm executable
+      shell: bash
+      run: chmod +x /usr/local/bin/unpm
 
     - name: Run unpm check
       shell: bash
