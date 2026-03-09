@@ -46,10 +46,14 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         .await?;
 
     // Step 4: Select file
-    let selected_file = select_file(&pkg_files, file, interactive)?;
+    let (selected_file, user_picked) = select_file(&pkg_files, file, interactive)?;
 
-    // Step 5: Minification preference
-    let final_file = handle_minification(&pkg_files, &selected_file, interactive)?;
+    // Step 5: Minification preference (skip if the user already picked a specific file)
+    let final_file = if user_picked {
+        selected_file
+    } else {
+        handle_minification(&pkg_files, &selected_file, interactive)?
+    };
 
     // Step 6: Fetch the file
     let url = Registry::file_url(&source, &selected_version, &final_file);
@@ -221,17 +225,19 @@ fn select_version(
     Ok(versions[selection].to_string())
 }
 
+/// Returns `(path, user_picked)` where `user_picked` is true when the user
+/// manually selected a specific file from the full list.
 fn select_file(
     pkg_files: &crate::registry::PackageFiles,
     file_flag: Option<&str>,
     interactive: bool,
-) -> Result<String> {
+) -> Result<(String, bool)> {
     if let Some(f) = file_flag {
         let path = f.strip_prefix('/').unwrap_or(f);
         if !pkg_files.files.iter().any(|fe| fe.path == path) {
             bail!("File {f} not found in package");
         }
-        return Ok(path.to_string());
+        return Ok((path.to_string(), true));
     }
 
     let default_path = pkg_files
@@ -240,7 +246,9 @@ fn select_file(
         .map(|d| d.strip_prefix('/').unwrap_or(d).to_string());
 
     if !interactive {
-        return default_path.ok_or_else(|| anyhow::anyhow!("No default entry point; use --file"));
+        return default_path
+            .map(|d| (d, false))
+            .ok_or_else(|| anyhow::anyhow!("No default entry point; use --file"));
     }
 
     if let Some(ref default) = default_path {
@@ -255,7 +263,7 @@ fn select_file(
             .interact()?;
 
         if selection == 0 {
-            return Ok(default.clone());
+            return Ok((default.clone(), false));
         }
     }
 
@@ -271,7 +279,7 @@ fn select_file(
         .default(0)
         .interact()?;
 
-    Ok(pkg_files.files[selection].path.clone())
+    Ok((pkg_files.files[selection].path.clone(), true))
 }
 
 fn handle_minification(
