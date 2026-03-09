@@ -165,6 +165,24 @@ fn flatten_files(nodes: &[ApiFileNode], prefix: &str, out: &mut Vec<FileEntry>) 
     }
 }
 
+/// Find the highest stable (non-prerelease) semver version.
+pub fn latest_stable(versions: &[VersionInfo]) -> Option<String> {
+    let mut stable: Vec<(String, semver::Version)> = versions
+        .iter()
+        .filter_map(|v| {
+            let sv = semver::Version::parse(&v.version).ok()?;
+            if sv.pre.is_empty() {
+                Some((v.version.clone(), sv))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    stable.sort_by(|a, b| b.1.cmp(&a.1));
+    stable.into_iter().next().map(|(s, _)| s)
+}
+
 const API_BASE: &str = "https://data.jsdelivr.com/v1/packages";
 const CDN_BASE: &str = "https://cdn.jsdelivr.net";
 

@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{PackageSource, Registry};
+use crate::registry::{latest_stable, PackageSource, Registry};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Result<()> {
@@ -144,14 +144,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     let output_dir = Path::new(&config.output_dir);
     vendor::place_file(output_dir, &vendored_filename, &result.bytes)?;
 
-    if config.canonical {
-        let known: std::collections::HashSet<&str> = lockfile
-            .dependencies
-            .values()
-            .map(|l| l.filename.as_str())
-            .collect();
-        vendor::clean(output_dir, &known)?;
-    }
+    vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
     println!("Added {source}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
 
@@ -175,19 +168,6 @@ fn sorted_versions(versions: &[crate::registry::VersionInfo]) -> Vec<&str> {
     parsed.into_iter().map(|(s, _)| s).collect()
 }
 
-/// Find the highest stable (non-prerelease) semver version.
-fn latest_stable(versions: &[crate::registry::VersionInfo]) -> Option<&str> {
-    let mut stable: Vec<(&str, semver::Version)> = versions
-        .iter()
-        .filter_map(|v| {
-            let sv = semver::Version::parse(&v.version).ok()?;
-            if sv.pre.is_empty() { Some((v.version.as_str(), sv)) } else { None }
-        })
-        .collect();
-
-    stable.sort_by(|a, b| b.1.cmp(&a.1));
-    stable.first().map(|(s, _)| *s)
-}
 
 fn select_version(
     pkg_info: &crate::registry::PackageInfo,
@@ -202,11 +182,12 @@ fn select_version(
     }
 
     // Prefer: latest tag > highest stable semver > first in sorted list
+    let stable = latest_stable(&pkg_info.versions);
     let default_version = pkg_info
         .tags
         .latest
         .as_deref()
-        .or_else(|| latest_stable(&pkg_info.versions))
+        .or(stable.as_deref())
         .or_else(|| sorted_versions(&pkg_info.versions).first().copied())
         .ok_or_else(|| anyhow::anyhow!("No versions found for {}", pkg_info.name))?;
 

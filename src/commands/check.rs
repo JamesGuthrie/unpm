@@ -3,7 +3,7 @@ use crate::cve::CveChecker;
 use crate::fetch::Fetcher;
 use crate::lockfile::Lockfile;
 use crate::manifest::Manifest;
-use crate::registry::{PackageSource, Registry};
+use crate::registry::{latest_stable, PackageSource, Registry};
 use futures::stream::{self, StreamExt};
 use std::path::Path;
 
@@ -152,16 +152,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                             .await
                             .ok()
                             .and_then(|info| {
-                                info.tags.latest.or_else(|| {
-                                    let mut stable: Vec<_> = info.versions.iter()
-                                        .filter_map(|v| {
-                                            let sv = semver::Version::parse(&v.version).ok()?;
-                                            if sv.pre.is_empty() { Some((v.version.clone(), sv)) } else { None }
-                                        })
-                                        .collect();
-                                    stable.sort_by(|a, b| b.1.cmp(&a.1));
-                                    stable.into_iter().next().map(|(s, _)| s)
-                                })
+                                info.tags.latest.or_else(|| latest_stable(&info.versions))
                             });
                         CheckResult::Outdated { name, current, latest }
                     }

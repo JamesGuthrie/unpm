@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{PackageSource, Registry};
+use crate::registry::{latest_stable, PackageSource, Registry};
 use crate::vendor;
 
 pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) -> Result<()> {
@@ -145,14 +145,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
     manifest.save()?;
     lockfile.save()?;
 
-    if config.canonical {
-        let known: std::collections::HashSet<&str> = lockfile
-            .dependencies
-            .values()
-            .map(|l| l.filename.as_str())
-            .collect();
-        vendor::clean(output_dir, &known)?;
-    }
+    vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
     Ok(())
 }
@@ -173,24 +166,6 @@ fn latest_compatible(versions: &[crate::registry::VersionInfo], major: u64) -> O
 
     compatible.sort_by(|a, b| b.1.cmp(&a.1));
     compatible.into_iter().next().map(|(s, _)| s)
-}
-
-/// Find the highest stable (non-prerelease) semver version.
-fn latest_stable(versions: &[crate::registry::VersionInfo]) -> Option<String> {
-    let mut stable: Vec<(String, semver::Version)> = versions
-        .iter()
-        .filter_map(|v| {
-            let sv = semver::Version::parse(&v.version).ok()?;
-            if sv.pre.is_empty() {
-                Some((v.version.clone(), sv))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    stable.sort_by(|a, b| b.1.cmp(&a.1));
-    stable.into_iter().next().map(|(s, _)| s)
 }
 
 /// Extract the file path portion from a jsdelivr CDN URL.

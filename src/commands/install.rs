@@ -55,14 +55,7 @@ pub async fn install() -> anyhow::Result<()> {
 
     pb.finish_with_message("Done");
 
-    if config.canonical {
-        let known: std::collections::HashSet<&str> = lockfile
-            .dependencies
-            .values()
-            .map(|l| l.filename.as_str())
-            .collect();
-        vendor::clean(output_dir, &known)?;
-    }
+    vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
     println!(
         "Installed {} dependencies to {}",

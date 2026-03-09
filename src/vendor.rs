@@ -2,6 +2,9 @@ use anyhow::{bail, Context};
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::config::Config;
+use crate::lockfile::Lockfile;
+
 /// Resolve a filename within output_dir, rejecting path traversal attempts.
 fn safe_path(output_dir: &Path, filename: &str) -> anyhow::Result<std::path::PathBuf> {
     let safe_name = Path::new(filename)
@@ -28,6 +31,19 @@ pub fn remove_file(output_dir: &Path, filename: &str) -> anyhow::Result<()> {
     if dest.exists() {
         std::fs::remove_file(&dest)
             .with_context(|| format!("Failed to remove: {}", dest.display()))?;
+    }
+    Ok(())
+}
+
+/// If canonical mode is enabled, remove untracked files from output_dir.
+pub fn clean_if_canonical(config: &Config, lockfile: &Lockfile, output_dir: &Path) -> anyhow::Result<()> {
+    if config.canonical {
+        let known: HashSet<&str> = lockfile
+            .dependencies
+            .values()
+            .map(|l| l.filename.as_str())
+            .collect();
+        clean(output_dir, &known)?;
     }
     Ok(())
 }
