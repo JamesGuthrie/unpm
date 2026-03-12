@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::fetch::Fetcher;
-use crate::lockfile::{LockedDependency, Lockfile};
+use crate::lockfile::{LockedDependency, LockedFile, Lockfile};
 use crate::manifest::{Dependency, Manifest};
 use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
@@ -102,7 +102,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             continue;
         }
 
-        let file_path = extract_file_path(&locked.url, &old_version)?;
+        let first_file = locked.files.first().expect("lockfile entry has no files");
+        let file_path = extract_file_path(&first_file.url, &old_version)?;
         let url = Registry::file_url(&source, &new_version, &file_path);
         let result = fetcher.fetch(&url).await?;
 
@@ -123,17 +124,19 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             },
         };
 
-        let filename = locked.filename.clone();
+        let filename = first_file.filename.clone();
 
         manifest.dependencies.insert(name.clone(), new_dep);
         lockfile.dependencies.insert(
             name.clone(),
             LockedDependency {
                 version: new_version.clone(),
-                url,
-                sha256: result.sha256,
-                size: result.size,
-                filename: filename.clone(),
+                files: vec![LockedFile {
+                    url,
+                    sha256: result.sha256,
+                    size: result.size,
+                    filename: filename.clone(),
+                }],
             },
         );
 

@@ -15,7 +15,8 @@ pub fn list() -> anyhow::Result<()> {
         let file_info = lockfile
             .dependencies
             .get(name)
-            .map(|l| l.filename.as_str())
+            .and_then(|l| l.files.first())
+            .map(|f| f.filename.as_str())
             .unwrap_or("(not installed)");
         println!("{file_info}: {name}@{version}");
     }

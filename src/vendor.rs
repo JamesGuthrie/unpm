@@ -45,7 +45,7 @@ pub fn clean_if_canonical(
         let known: HashSet<&str> = lockfile
             .dependencies
             .values()
-            .map(|l| l.filename.as_str())
+            .flat_map(|l| l.files.iter().map(|f| f.filename.as_str()))
             .collect();
         clean(output_dir, &known)?;
     }

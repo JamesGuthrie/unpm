@@ -7,9 +7,14 @@ pub struct Lockfile {
     pub dependencies: BTreeMap<String, LockedDependency>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LockedDependency {
     pub version: String,
+    pub files: Vec<LockedFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct LockedFile {
     pub url: String,
     pub sha256: String,
     pub size: u64,

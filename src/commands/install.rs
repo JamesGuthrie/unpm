@@ -32,19 +32,21 @@ pub async fn install() -> anyhow::Result<()> {
             anyhow::anyhow!("'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first.")
         })?;
 
+        let first_file = locked.files.first().expect("lockfile entry has no files");
+
         // Use custom URL from manifest if specified, otherwise use lockfile URL
-        let url = dep.url().unwrap_or(&locked.url);
+        let url = dep.url().unwrap_or(&first_file.url);
         let result = fetcher.fetch(url).await?;
 
-        if !Fetcher::verify(&result.bytes, &locked.sha256) {
+        if !Fetcher::verify(&result.bytes, &first_file.sha256) {
             anyhow::bail!(
                 "SHA mismatch for {name}!\nExpected: {}\nGot:      {}\nThe remote file may have been tampered with.",
-                locked.sha256,
+                first_file.sha256,
                 result.sha256
             );
         }
 
-        vendor::place_file(output_dir, &locked.filename, &result.bytes)?;
+        vendor::place_file(output_dir, &first_file.filename, &result.bytes)?;
         pb.inc(1);
     }
 

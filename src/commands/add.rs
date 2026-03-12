@@ -6,7 +6,7 @@ use dialoguer::{Confirm, Select};
 
 use crate::config::Config;
 use crate::fetch::Fetcher;
-use crate::lockfile::{LockedDependency, Lockfile};
+use crate::lockfile::{LockedDependency, LockedFile, Lockfile};
 use crate::manifest::{Dependency, Manifest};
 use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
@@ -74,7 +74,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
     let has_collision = lockfile
         .dependencies
         .values()
-        .any(|l| l.filename == original_filename);
+        .any(|l| l.files.iter().any(|f| f.filename == original_filename));
     let vendored_filename = if has_collision {
         format!(
             "{}_{}",
@@ -138,10 +138,12 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
         manifest_key.clone(),
         LockedDependency {
             version: selected_version.clone(),
-            url: url.clone(),
-            sha256: result.sha256.clone(),
-            size: result.size,
-            filename: vendored_filename.clone(),
+            files: vec![LockedFile {
+                url: url.clone(),
+                sha256: result.sha256.clone(),
+                size: result.size,
+                filename: vendored_filename.clone(),
+            }],
         },
     );
     lockfile.save()?;

@@ -74,16 +74,17 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 continue;
             }
         };
-        log::debug!("  lockfile filename: {}", locked.filename);
+        let first_file = locked.files.first().expect("lockfile entry has no files");
+        log::debug!("  lockfile filename: {}", first_file.filename);
 
-        let file_path = output_dir.join(&locked.filename);
+        let file_path = output_dir.join(&first_file.filename);
 
         let local_sha256 = match std::fs::read(&file_path) {
             Ok(bytes) => {
                 let hash = Fetcher::hash(&bytes);
-                if hash != locked.sha256 {
+                if hash != first_file.sha256 {
                     integrity_errors
-                        .push(format!("  {name}: SHA mismatch for {}", locked.filename));
+                        .push(format!("  {name}: SHA mismatch for {}", first_file.filename));
                 }
                 hash
             }
@@ -103,7 +104,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 source,
                 version: dep.version().to_string(),
                 local_sha256,
-                filename: locked.filename.clone(),
+                filename: first_file.filename.clone(),
             });
         }
 
