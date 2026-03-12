@@ -243,7 +243,8 @@ fn select_file(
     let default_path = pkg_files
         .default
         .as_deref()
-        .map(|d| d.strip_prefix('/').unwrap_or(d).to_string());
+        .map(|d| d.strip_prefix('/').unwrap_or(d).to_string())
+        .map(|d| resolve_default_path(&d, &pkg_files.files));
 
     if !interactive {
         return default_path
@@ -316,6 +317,31 @@ fn handle_minification(
     }
 
     Ok(selected_file.to_string())
+}
+
+/// jsdelivr's API can return a default path pointing to an auto-minified file
+/// (e.g. `lib/foo.min.js`) that doesn't actually exist in the package — jsdelivr
+/// generates it on the fly. Fall back to the unminified counterpart so we
+/// reference a real file whose hash we can verify.
+fn resolve_default_path(default: &str, files: &[crate::registry::FileEntry]) -> String {
+    if files.iter().any(|f| f.path == default) {
+        return default.to_string();
+    }
+
+    for ext in &[".js", ".css"] {
+        let min_ext = format!(".min{ext}");
+        if let Some(stem) = default.strip_suffix(&min_ext) {
+            let unminified = format!("{stem}{ext}");
+            if files.iter().any(|f| f.path == unminified) {
+                log::debug!(
+                    "default path '{default}' not in file listing, using '{unminified}' instead"
+                );
+                return unminified;
+            }
+        }
+    }
+
+    default.to_string()
 }
 
 fn find_min_counterpart(
