@@ -14,11 +14,7 @@ pub enum Dependency {
         file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         url: Option<String>,
-        #[serde(
-            default,
-            rename = "ignore-cves",
-            skip_serializing_if = "Vec::is_empty"
-        )]
+        #[serde(default, rename = "ignore-cves", skip_serializing_if = "Vec::is_empty")]
         ignore_cves: Vec<String>,
     },
 }
@@ -62,7 +58,10 @@ impl Dependency {
 
 /// Quote a TOML key if it contains characters that require quoting.
 fn toml_key(key: &str) -> String {
-    if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         key.to_string()
     } else {
         format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
@@ -120,7 +119,8 @@ impl Manifest {
                         fields.push(format!("url = {}", toml_string(u)));
                     }
                     if !ignore_cves.is_empty() {
-                        let cves: Vec<String> = ignore_cves.iter().map(|c| toml_string(c)).collect();
+                        let cves: Vec<String> =
+                            ignore_cves.iter().map(|c| toml_string(c)).collect();
                         fields.push(format!("ignore-cves = [{}]", cves.join(", ")));
                     }
                     writeln!(out, "{key} = {{ {} }}", fields.join(", "))?;

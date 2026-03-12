@@ -28,14 +28,9 @@ pub async fn install() -> anyhow::Result<()> {
     pb.set_message("Installing");
 
     for (name, dep) in &manifest.dependencies {
-        let locked = lockfile
-            .dependencies
-            .get(name)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first."
-                )
-            })?;
+        let locked = lockfile.dependencies.get(name).ok_or_else(|| {
+            anyhow::anyhow!("'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first.")
+        })?;
 
         // Use custom URL from manifest if specified, otherwise use lockfile URL
         let url = dep.url().unwrap_or(&locked.url);

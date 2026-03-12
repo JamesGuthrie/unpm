@@ -47,5 +47,8 @@ fn from_json_string() {
     let lockfile = Lockfile::from_json(json).unwrap();
     assert_eq!(lockfile.dependencies.len(), 1);
     assert_eq!(lockfile.dependencies["htmx.org"].version, "2.0.4");
-    assert_eq!(lockfile.dependencies["htmx.org"].filename, "htmx.org_htmx.min.js");
+    assert_eq!(
+        lockfile.dependencies["htmx.org"].filename,
+        "htmx.org_htmx.min.js"
+    );
 }

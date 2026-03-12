@@ -87,8 +87,14 @@ some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
     let manifest: Manifest = toml::from_str(toml).unwrap();
     assert_eq!(manifest.dependencies.len(), 3);
 
-    assert!(matches!(manifest.dependencies["htmx.org"], Dependency::Short(_)));
-    assert!(matches!(manifest.dependencies["d3"], Dependency::Extended { .. }));
+    assert!(matches!(
+        manifest.dependencies["htmx.org"],
+        Dependency::Short(_)
+    ));
+    assert!(matches!(
+        manifest.dependencies["d3"],
+        Dependency::Extended { .. }
+    ));
 }
 
 #[test]
@@ -113,5 +119,8 @@ fn inline_table_format_roundtrips() {
     assert_eq!(reparsed.dependencies.len(), 2);
     assert_eq!(reparsed.dependencies["htmx.org"].version(), "2.0.4");
     assert_eq!(reparsed.dependencies["gh:user/repo"].version(), "1.0.0");
-    assert_eq!(reparsed.dependencies["gh:user/repo"].file(), Some("dist/lib.js"));
+    assert_eq!(
+        reparsed.dependencies["gh:user/repo"].file(),
+        Some("dist/lib.js")
+    );
 }

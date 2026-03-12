@@ -1,11 +1,11 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::Path;
 
 use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{latest_stable, PackageSource, Registry};
+use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
 
 pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) -> Result<()> {
@@ -58,9 +58,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             Some(v) => v.to_string(),
             None => {
                 let pkg_info = registry.get_package(&source).await?;
-                let current_major = semver::Version::parse(&old_version)
-                    .ok()
-                    .map(|v| v.major);
+                let current_major = semver::Version::parse(&old_version).ok().map(|v| v.major);
 
                 match current_major {
                     Some(major) if !latest => {
@@ -69,7 +67,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                                 // If already at latest compatible, check if a newer major exists
                                 if v == old_version {
                                     if let Some(abs_latest) = latest_stable(&pkg_info.versions)
-                                        && abs_latest != old_version {
+                                        && abs_latest != old_version
+                                    {
                                         println!(
                                             "{name}: {old_version} held back \
                                              ({abs_latest} available, use --latest to update across major versions)"

@@ -1,14 +1,14 @@
 use std::io::IsTerminal;
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use dialoguer::{Confirm, Select};
 
 use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{latest_stable, PackageSource, Registry};
+use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Result<()> {
@@ -71,7 +71,10 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
 
     // Use plain filename unless it would collide with an existing vendored file
     let lockfile = Lockfile::load()?;
-    let has_collision = lockfile.dependencies.values().any(|l| l.filename == original_filename);
+    let has_collision = lockfile
+        .dependencies
+        .values()
+        .any(|l| l.filename == original_filename);
     let vendored_filename = if has_collision {
         format!(
             "{}_{}",
@@ -150,7 +153,10 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
 
     vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
-    println!("Added {source}@{selected_version} -> {}/{vendored_filename}", config.output_dir);
+    println!(
+        "Added {source}@{selected_version} -> {}/{vendored_filename}",
+        config.output_dir
+    );
 
     Ok(())
 }
@@ -171,7 +177,6 @@ fn sorted_versions(versions: &[crate::registry::VersionInfo]) -> Vec<&str> {
 
     parsed.into_iter().map(|(s, _)| s).collect()
 }
-
 
 fn select_version(
     pkg_info: &crate::registry::PackageInfo,
@@ -205,10 +210,7 @@ fn select_version(
         format!("Use latest stable version ({default_version})?")
     };
 
-    let use_default = Confirm::new()
-        .with_prompt(label)
-        .default(true)
-        .interact()?;
+    let use_default = Confirm::new().with_prompt(label).default(true).interact()?;
 
     if use_default {
         return Ok(default_version.to_string());
@@ -344,26 +346,17 @@ fn resolve_default_path(default: &str, files: &[crate::registry::FileEntry]) -> 
     default.to_string()
 }
 
-fn find_min_counterpart(
-    selected: &str,
-    all_files: &[&str],
-) -> Option<(String, String)> {
+fn find_min_counterpart(selected: &str, all_files: &[&str]) -> Option<(String, String)> {
     for ext in &[".js", ".css"] {
         let min_ext = format!(".min{ext}");
 
         if selected.ends_with(&min_ext) {
-            let unminified = format!(
-                "{}{ext}",
-                &selected[..selected.len() - min_ext.len()]
-            );
+            let unminified = format!("{}{ext}", &selected[..selected.len() - min_ext.len()]);
             if all_files.contains(&unminified.as_str()) {
                 return Some((selected.to_string(), unminified));
             }
         } else if let Some(stripped) = selected.strip_suffix(ext) {
-            let minified = format!(
-                "{}{min_ext}",
-                stripped
-            );
+            let minified = format!("{}{min_ext}", stripped);
             if all_files.contains(&minified.as_str()) {
                 return Some((minified, selected.to_string()));
             }
