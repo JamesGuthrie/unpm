@@ -7,7 +7,7 @@ pub struct Lockfile {
     pub dependencies: BTreeMap<String, LockedDependency>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 pub struct LockedDependency {
     pub version: String,
     pub files: Vec<LockedFile>,
@@ -19,6 +19,71 @@ pub struct LockedFile {
     pub sha256: String,
     pub size: u64,
     pub filename: String,
+}
+
+impl<'de> Deserialize<'de> for LockedDependency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Raw {
+            version: String,
+            files: Option<Vec<LockedFile>>,
+            url: Option<String>,
+            sha256: Option<String>,
+            size: Option<u64>,
+            filename: Option<String>,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+
+        let has_old = raw.url.is_some()
+            || raw.sha256.is_some()
+            || raw.size.is_some()
+            || raw.filename.is_some();
+        let has_new = raw.files.is_some();
+
+        if has_old && has_new {
+            return Err(serde::de::Error::custom(
+                "corrupt lockfile: contains both old flat fields and new files array",
+            ));
+        }
+
+        if has_new {
+            Ok(LockedDependency {
+                version: raw.version,
+                files: raw.files.unwrap(),
+            })
+        } else if has_old {
+            let url = raw
+                .url
+                .ok_or_else(|| serde::de::Error::missing_field("url"))?;
+            let sha256 = raw
+                .sha256
+                .ok_or_else(|| serde::de::Error::missing_field("sha256"))?;
+            let size = raw
+                .size
+                .ok_or_else(|| serde::de::Error::missing_field("size"))?;
+            let filename = raw
+                .filename
+                .ok_or_else(|| serde::de::Error::missing_field("filename"))?;
+
+            Ok(LockedDependency {
+                version: raw.version,
+                files: vec![LockedFile {
+                    url,
+                    sha256,
+                    size,
+                    filename,
+                }],
+            })
+        } else {
+            Err(serde::de::Error::custom(
+                "lockfile entry has neither files array nor legacy flat fields",
+            ))
+        }
+    }
 }
 
 impl Lockfile {

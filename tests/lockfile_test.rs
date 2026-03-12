@@ -113,3 +113,53 @@ fn new_format_multi_file() {
     assert_eq!(dep.files[0].filename, "bootstrap_bootstrap.min.js");
     assert_eq!(dep.files[1].filename, "bootstrap_bootstrap.min.css");
 }
+
+#[test]
+fn migrate_old_format() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4",
+            "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+            "sha256": "abc123",
+            "size": 12345,
+            "filename": "htmx.org_htmx.min.js"
+        }
+    }"#;
+    let lockfile = Lockfile::from_json(json).unwrap();
+    let dep = &lockfile.dependencies["htmx.org"];
+    assert_eq!(dep.version, "2.0.4");
+    assert_eq!(dep.files.len(), 1);
+    assert_eq!(
+        dep.files[0].url,
+        "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
+    );
+    assert_eq!(dep.files[0].sha256, "abc123");
+    assert_eq!(dep.files[0].size, 12345);
+    assert_eq!(dep.files[0].filename, "htmx.org_htmx.min.js");
+}
+
+#[test]
+fn reject_corrupt_lockfile_both_formats() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4",
+            "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+            "sha256": "abc123",
+            "size": 12345,
+            "filename": "htmx.org_htmx.min.js",
+            "files": [{
+                "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+                "sha256": "abc123",
+                "size": 12345,
+                "filename": "htmx.org_htmx.min.js"
+            }]
+        }
+    }"#;
+    let result = Lockfile::from_json(json);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("corrupt"),
+        "Expected error about corrupt lockfile, got: {err}"
+    );
+}
