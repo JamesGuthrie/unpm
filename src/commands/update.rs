@@ -112,6 +112,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             Dependency::Extended {
                 source,
                 file,
+                files,
                 url: url_override,
                 ignore_cves,
                 ..
@@ -119,6 +120,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                 version: new_version.clone(),
                 source: source.clone(),
                 file: file.clone(),
+                files: files.clone(),
                 url: url_override.clone(),
                 ignore_cves: ignore_cves.clone(),
             },

@@ -83,8 +83,10 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
             Ok(bytes) => {
                 let hash = Fetcher::hash(&bytes);
                 if hash != first_file.sha256 {
-                    integrity_errors
-                        .push(format!("  {name}: SHA mismatch for {}", first_file.filename));
+                    integrity_errors.push(format!(
+                        "  {name}: SHA mismatch for {}",
+                        first_file.filename
+                    ));
                 }
                 hash
             }

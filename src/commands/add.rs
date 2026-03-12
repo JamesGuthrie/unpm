@@ -125,6 +125,7 @@ pub async fn add(package: &str, version: Option<&str>, file: Option<&str>) -> Re
             version: selected_version.clone(),
             source: None,
             file: Some(final_file.clone()),
+            files: None,
             url: None,
             ignore_cves: Vec::new(),
         }

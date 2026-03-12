@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use unpm::manifest::{Dependency, Manifest};
 
 #[test]
@@ -124,3 +125,76 @@ fn inline_table_format_roundtrips() {
         Some("dist/lib.js")
     );
 }
+
+// Task 3 tests
+
+#[test]
+fn parse_files_form() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = ["dist/uPlot.min.js", "dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let dep = &manifest.dependencies["uplot"];
+    assert_eq!(dep.version(), "1.6.31");
+    assert_eq!(
+        dep.files(),
+        Some(
+            &[
+                "dist/uPlot.min.js".to_string(),
+                "dist/uPlot.min.css".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(dep.file(), None);
+}
+
+#[test]
+fn files_single_element_valid() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = ["dist/uPlot.min.js"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let dep = &manifest.dependencies["uplot"];
+    assert_eq!(dep.files(), Some(&["dist/uPlot.min.js".to_string()][..]));
+}
+
+#[test]
+fn save_roundtrip_with_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest_path = dir.path().join("unpm.toml");
+
+    let manifest = Manifest {
+        dependencies: BTreeMap::from([(
+            "uplot".to_string(),
+            Dependency::Extended {
+                version: "1.6.31".to_string(),
+                source: None,
+                file: None,
+                files: Some(vec![
+                    "dist/uPlot.min.js".to_string(),
+                    "dist/uPlot.min.css".to_string(),
+                ]),
+                url: None,
+                ignore_cves: Vec::new(),
+            },
+        )]),
+    };
+
+    manifest.save_to(&manifest_path).unwrap();
+    let reparsed = Manifest::load_from(&manifest_path).unwrap();
+    let dep = &reparsed.dependencies["uplot"];
+    assert_eq!(dep.version(), "1.6.31");
+    assert_eq!(
+        dep.files(),
+        Some(
+            &[
+                "dist/uPlot.min.js".to_string(),
+                "dist/uPlot.min.css".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(dep.file(), None);
+}
+

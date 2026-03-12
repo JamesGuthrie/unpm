@@ -13,6 +13,8 @@ pub enum Dependency {
         #[serde(skip_serializing_if = "Option::is_none")]
         file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        files: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         url: Option<String>,
         #[serde(default, rename = "ignore-cves", skip_serializing_if = "Vec::is_empty")]
         ignore_cves: Vec<String>,
@@ -38,6 +40,13 @@ impl Dependency {
         match self {
             Dependency::Short(_) => None,
             Dependency::Extended { file, .. } => file.as_deref(),
+        }
+    }
+
+    pub fn files(&self) -> Option<&[String]> {
+        match self {
+            Dependency::Short(_) => None,
+            Dependency::Extended { files, .. } => files.as_deref(),
         }
     }
 
@@ -80,7 +89,10 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load() -> anyhow::Result<Self> {
-        let path = std::path::Path::new("unpm.toml");
+        Self::load_from(std::path::Path::new("unpm.toml"))
+    }
+
+    pub fn load_from(path: &std::path::Path) -> anyhow::Result<Self> {
         if path.exists() {
             let contents = std::fs::read_to_string(path)?;
             Ok(toml::from_str(&contents)?)
@@ -92,6 +104,10 @@ impl Manifest {
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
+        self.save_to(std::path::Path::new("unpm.toml"))
+    }
+
+    pub fn save_to(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let mut out = String::new();
         writeln!(out, "[dependencies]")?;
 
@@ -105,6 +121,7 @@ impl Manifest {
                     version,
                     source,
                     file,
+                    files,
                     url,
                     ignore_cves,
                 } => {
@@ -114,6 +131,10 @@ impl Manifest {
                     }
                     if let Some(f) = file {
                         fields.push(format!("file = {}", toml_string(f)));
+                    }
+                    if let Some(fs) = files {
+                        let items: Vec<String> = fs.iter().map(|f| toml_string(f)).collect();
+                        fields.push(format!("files = [{}]", items.join(", ")));
                     }
                     if let Some(u) = url {
                         fields.push(format!("url = {}", toml_string(u)));
@@ -128,7 +149,7 @@ impl Manifest {
             }
         }
 
-        std::fs::write("unpm.toml", out)?;
+        std::fs::write(path, out)?;
         Ok(())
     }
 }
