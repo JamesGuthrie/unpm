@@ -205,7 +205,9 @@ impl Registry {
 
     pub async fn get_package(&self, source: &PackageSource) -> Result<PackageInfo> {
         let url = format!("{API_BASE}/{}", source.api_path());
+        log::debug!("GET {url}");
         let resp = self.client.get(&url).send().await?;
+        log::debug!("  -> {}", resp.status());
 
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             bail!("Package not found: {source}");
@@ -232,7 +234,9 @@ impl Registry {
         version: &str,
     ) -> Result<PackageFiles> {
         let url = format!("{API_BASE}/{}@{version}", source.api_path());
+        log::debug!("GET {url}");
         let resp = self.client.get(&url).send().await?;
+        log::debug!("  -> {}", resp.status());
 
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             bail!("Package not found: {source}@{version}");
@@ -242,6 +246,12 @@ impl Registry {
 
         let mut files = Vec::new();
         flatten_files(&api.files, "", &mut files);
+
+        log::debug!("  default: {:?}", api.default);
+        log::debug!("  {} files returned", files.len());
+        for f in &files {
+            log::debug!("    {} (hash: {})", f.path, f.hash);
+        }
 
         Ok(PackageFiles {
             default: api.default,

@@ -5,6 +5,13 @@ use unpm::cli::{Cli, Command};
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    if cli.debug {
+        env_logger::Builder::new()
+            .filter_level(log::LevelFilter::Debug)
+            .format_target(false)
+            .init();
+    }
+
     match cli.command {
         Command::Add { package, version, file } => {
             unpm::commands::add(&package, version.as_deref(), file.as_deref()).await?;

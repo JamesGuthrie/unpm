@@ -32,6 +32,7 @@ impl Fetcher {
     }
 
     pub async fn fetch(&self, url: &str) -> Result<FetchResult> {
+        log::debug!("fetching {url}");
         let response = self.client.get(url).send().await?.error_for_status()?;
 
         if let Some(len) = response.content_length() {
@@ -56,6 +57,8 @@ impl Fetcher {
 
         let sha256 = Self::hash(&bytes);
         let size = bytes.len() as u64;
+
+        log::debug!("  -> {} bytes, sha256: {sha256}", size);
 
         Ok(FetchResult {
             bytes,

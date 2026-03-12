@@ -65,6 +65,8 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
 
     // SHA verification against lockfile (local, synchronous)
     for (name, dep) in &manifest.dependencies {
+        log::debug!("checking {name} v{}", dep.version());
+
         let locked = match lockfile.dependencies.get(name) {
             Some(l) => l,
             None => {
@@ -72,6 +74,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 continue;
             }
         };
+        log::debug!("  lockfile filename: {}", locked.filename);
 
         let file_path = output_dir.join(&locked.filename);
 
@@ -137,11 +140,17 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                     CheckTask::CdnHash { name, source, version, local_sha256, filename } => {
                         let result = async {
                             let pkg_files = registry.get_package_files(&source, &version).await?;
+                            log::debug!("{name}: looking for filename '{filename}' in CDN file list");
                             let entry = pkg_files.files.iter().find(|f| {
-                                Path::new(&f.path)
+                                let cdn_filename = Path::new(&f.path)
                                     .file_name()
-                                    .is_some_and(|n| n == filename.as_str())
+                                    .map(|n| n.to_string_lossy().to_string());
+                                log::debug!("  comparing CDN path '{}' (filename: {:?}) with '{filename}'", f.path, cdn_filename);
+                                cdn_filename.is_some_and(|n| n == filename)
                             });
+                            if entry.is_none() {
+                                log::debug!("{name}: no matching file found in {} CDN entries", pkg_files.files.len());
+                            }
                             Ok(entry.map(|e| e.hash.clone()))
                         }.await;
                         CheckResult::CdnHash { name, result, local_sha256 }
