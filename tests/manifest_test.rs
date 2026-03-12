@@ -198,3 +198,44 @@ fn save_roundtrip_with_files() {
     assert_eq!(dep.file(), None);
 }
 
+#[test]
+fn reject_file_and_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", file = "dist/uPlot.min.js", files = ["dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("mutually exclusive"),
+        "expected mutually exclusive error, got: {err}"
+    );
+}
+
+#[test]
+fn reject_url_and_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", url = "https://example.com/lib.js", files = ["dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("mutually exclusive"),
+        "expected mutually exclusive error, got: {err}"
+    );
+}
+
+#[test]
+fn reject_empty_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = [] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("must not be empty"),
+        "expected empty error, got: {err}"
+    );
+}

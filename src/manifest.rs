@@ -95,12 +95,36 @@ impl Manifest {
     pub fn load_from(path: &std::path::Path) -> anyhow::Result<Self> {
         if path.exists() {
             let contents = std::fs::read_to_string(path)?;
-            Ok(toml::from_str(&contents)?)
+            let manifest: Self = toml::from_str(&contents)?;
+            manifest.validate()?;
+            Ok(manifest)
         } else {
             Ok(Self {
                 dependencies: BTreeMap::new(),
             })
         }
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        for (name, dep) in &self.dependencies {
+            if let Dependency::Extended {
+                file, files, url, ..
+            } = dep
+            {
+                if file.is_some() && files.is_some() {
+                    anyhow::bail!("{name}: `file` and `files` are mutually exclusive");
+                }
+                if url.is_some() && files.is_some() {
+                    anyhow::bail!("{name}: `url` and `files` are mutually exclusive");
+                }
+                if let Some(fs) = files
+                    && fs.is_empty()
+                {
+                    anyhow::bail!("{name}: `files` must not be empty");
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
