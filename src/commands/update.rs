@@ -103,7 +103,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         }
 
         let first_file = locked.files.first().expect("lockfile entry has no files");
-        let file_path = extract_file_path(&first_file.url, &old_version)?;
+        let file_path = crate::url::extract_file_path(&first_file.url, &old_version)?;
         let url = Registry::file_url(&source, &new_version, &file_path);
         let result = fetcher.fetch(&url).await?;
 
@@ -172,15 +172,3 @@ fn latest_compatible(versions: &[crate::registry::VersionInfo], major: u64) -> O
     compatible.into_iter().next().map(|(s, _)| s)
 }
 
-/// Extract the file path portion from a jsdelivr CDN URL.
-fn extract_file_path(url: &str, version: &str) -> Result<String> {
-    let marker = format!("@{version}/");
-    let idx = url
-        .find(&marker)
-        .ok_or_else(|| anyhow::anyhow!("Cannot parse file path from lockfile URL: {url}"))?;
-    let path = &url[idx + marker.len()..];
-    if path.is_empty() {
-        bail!("No file path found in lockfile URL: {url}");
-    }
-    Ok(path.to_string())
-}
