@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
             version,
             file,
         } => {
-            unpm::commands::add(&package, version.as_deref(), file.as_deref()).await?;
+            unpm::commands::add(&package, version.as_deref(), &file).await?;
         }
         Command::Install => {
             unpm::commands::install().await?;

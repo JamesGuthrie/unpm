@@ -20,9 +20,9 @@ pub enum Command {
         /// Package version (default: latest)
         #[arg(long)]
         version: Option<String>,
-        /// File path within the package
-        #[arg(long)]
-        file: Option<String>,
+        /// File path(s) within the package (repeatable)
+        #[arg(long, action = clap::ArgAction::Append)]
+        file: Vec<String>,
     },
     /// Fetch all dependencies
     Install,
