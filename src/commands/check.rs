@@ -163,11 +163,8 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                     } => {
                         let result = async {
                             let file_path = crate::url::extract_file_path(&url, &version)?;
-                            let pkg_files =
-                                registry.get_package_files(&source, &version).await?;
-                            log::debug!(
-                                "{name}: looking for path '{file_path}' in CDN file list"
-                            );
+                            let pkg_files = registry.get_package_files(&source, &version).await?;
+                            log::debug!("{name}: looking for path '{file_path}' in CDN file list");
                             let entry = pkg_files.files.iter().find(|f| f.path == file_path);
                             if entry.is_none() {
                                 log::debug!(

@@ -107,8 +107,13 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
             .to_string_lossy()
             .to_string();
 
-        let vendored_filename =
-            resolve_filename(&original_filename, file_path, &manifest_key, &lockfile, &fetched_files);
+        let vendored_filename = resolve_filename(
+            &original_filename,
+            file_path,
+            &manifest_key,
+            &lockfile,
+            &fetched_files,
+        );
 
         fetched_files.push((
             file_path.clone(),
@@ -269,11 +274,7 @@ fn resolve_filename(
     }
 
     // Cross-package collision: namespace with package name
-    format!(
-        "{}_{}",
-        manifest_key.replace(['/', ':'], "-"),
-        original
-    )
+    format!("{}_{}", manifest_key.replace(['/', ':'], "-"), original)
 }
 
 fn select_files(
@@ -326,8 +327,7 @@ fn select_files(
 
         if selection == 0 {
             // Check for min counterpart
-            let file_paths: Vec<&str> =
-                pkg_files.files.iter().map(|f| f.path.as_str()).collect();
+            let file_paths: Vec<&str> = pkg_files.files.iter().map(|f| f.path.as_str()).collect();
             let final_file =
                 if let Some((min_file, full_file)) = find_min_counterpart(default, &file_paths) {
                     let items = &[
@@ -340,11 +340,7 @@ fn select_files(
                         .items(items)
                         .default(default_idx)
                         .interact()?;
-                    if selection == 0 {
-                        min_file
-                    } else {
-                        full_file
-                    }
+                    if selection == 0 { min_file } else { full_file }
                 } else {
                     default.clone()
                 };
@@ -441,10 +437,7 @@ fn select_version(
         format!("Use latest stable version ({default_version})?")
     };
 
-    let use_default = Confirm::new()
-        .with_prompt(label)
-        .default(true)
-        .interact()?;
+    let use_default = Confirm::new().with_prompt(label).default(true).interact()?;
 
     if use_default {
         return Ok(default_version.to_string());

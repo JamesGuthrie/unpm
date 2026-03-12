@@ -188,4 +188,3 @@ fn latest_compatible(versions: &[crate::registry::VersionInfo], major: u64) -> O
     compatible.sort_by(|a, b| b.1.cmp(&a.1));
     compatible.into_iter().next().map(|(s, _)| s)
 }
-
