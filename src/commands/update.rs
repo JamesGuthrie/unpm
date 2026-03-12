@@ -49,7 +49,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let locked = lockfile
             .dependencies
             .get(name.as_str())
-            .ok_or_else(|| anyhow::anyhow!("'{name}' not found in lockfile"))?;
+            .ok_or_else(|| anyhow::anyhow!("'{name}' not found in lockfile"))?
+            .clone();
 
         let source = PackageSource::from_manifest(name, dep.source())?;
         let old_version = dep.version().to_string();
@@ -102,10 +103,31 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             continue;
         }
 
-        let first_file = locked.files.first().expect("lockfile entry has no files");
-        let file_path = crate::url::extract_file_path(&first_file.url, &old_version)?;
-        let url = Registry::file_url(&source, &new_version, &file_path);
-        let result = fetcher.fetch(&url).await?;
+        struct FetchedFile {
+            locked: LockedFile,
+            bytes: Vec<u8>,
+        }
+
+        let mut fetched: Vec<FetchedFile> = Vec::new();
+        for locked_file in &locked.files {
+            let file_path = crate::url::extract_file_path(&locked_file.url, &old_version)?;
+            let url = Registry::file_url(&source, &new_version, &file_path);
+            let result = match fetcher.fetch(&url).await {
+                Ok(r) => r,
+                Err(e) => bail!(
+                    "{name}: failed to fetch '{file_path}' at version {new_version}: {e}\nAdjust the `files` list in unpm.toml and retry."
+                ),
+            };
+            fetched.push(FetchedFile {
+                locked: LockedFile {
+                    url,
+                    sha256: result.sha256,
+                    size: result.size,
+                    filename: locked_file.filename.clone(),
+                },
+                bytes: result.bytes.to_vec(),
+            });
+        }
 
         let new_dep = match dep {
             Dependency::Short(_) => Dependency::Short(new_version.clone()),
@@ -126,23 +148,18 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             },
         };
 
-        let filename = first_file.filename.clone();
-
         manifest.dependencies.insert(name.clone(), new_dep);
         lockfile.dependencies.insert(
             name.clone(),
             LockedDependency {
                 version: new_version.clone(),
-                files: vec![LockedFile {
-                    url,
-                    sha256: result.sha256,
-                    size: result.size,
-                    filename: filename.clone(),
-                }],
+                files: fetched.iter().map(|f| f.locked.clone()).collect(),
             },
         );
 
-        vendor::place_file(output_dir, &filename, &result.bytes)?;
+        for f in &fetched {
+            vendor::place_file(output_dir, &f.locked.filename, &f.bytes)?;
+        }
         println!("{name}: {old_version} -> {new_version}");
     }
 
