@@ -163,3 +163,13 @@ fn reject_corrupt_lockfile_both_formats() {
         "Expected error about corrupt lockfile, got: {err}"
     );
 }
+
+#[test]
+fn reject_lockfile_entry_with_no_file_data() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4"
+        }
+    }"#;
+    assert!(Lockfile::from_json(json).is_err());
+}
