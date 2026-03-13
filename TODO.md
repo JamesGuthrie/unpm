@@ -1,4 +1,4 @@
 - [ ] `unpm search` — search for packages
 - [ ] `unpm add <pkg>` disambiguation — when a package name is ambiguous (e.g. `hmtx` vs `htmx.org`), prompt the user to choose
 - [ ] make claude-friendly
-- [ ] multiple files per dependency
+- [x] multiple files per dependency
