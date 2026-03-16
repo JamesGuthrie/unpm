@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::lockfile::Lockfile;
 
 /// Resolve a filename within output_dir, rejecting path traversal attempts.
+// r[impl add.vendor.path-traversal]
 fn safe_path(output_dir: &Path, filename: &str) -> anyhow::Result<std::path::PathBuf> {
     let safe_name = Path::new(filename)
         .file_name()
@@ -18,6 +19,7 @@ fn safe_path(output_dir: &Path, filename: &str) -> anyhow::Result<std::path::Pat
 }
 
 pub fn place_file(output_dir: &Path, filename: &str, content: &[u8]) -> anyhow::Result<()> {
+    // r[impl add.vendor.output-directory]
     std::fs::create_dir_all(output_dir)
         .with_context(|| format!("Failed to create directory: {}", output_dir.display()))?;
     let dest = safe_path(output_dir, filename)?;
@@ -41,6 +43,8 @@ pub fn clean_if_canonical(
     lockfile: &Lockfile,
     output_dir: &Path,
 ) -> anyhow::Result<()> {
+    // r[impl config.canonical.cleanup]
+    // r[impl config.canonical.disabled]
     if config.canonical {
         let known: HashSet<&str> = lockfile
             .dependencies

@@ -15,6 +15,7 @@ pub struct Cli {
 pub enum Command {
     /// Add a dependency (interactive)
     Add {
+        // r[impl add.input.package-name]
         /// Package specifier: npm name (e.g. htmx.org) or gh:user/repo
         package: String,
         /// Package version (default: latest)

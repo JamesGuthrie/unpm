@@ -2,3 +2,6 @@
 - [ ] `unpm add <pkg>` disambiguation — when a package name is ambiguous (e.g. `hmtx` vs `htmx.org`), prompt the user to choose
 - [ ] make claude-friendly
 - [x] multiple files per dependency
+- [ ] remove url from manifest
+- [ ] implement GIT ecosystem CVE check
+- [ ] specify 'stable' version and clean up in specs

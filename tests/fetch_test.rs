@@ -18,6 +18,7 @@ async fn test_fetch_consistent_hash() {
     assert_eq!(r1.sha256, r2.sha256);
 }
 
+// r[verify install.integrity.sha256]
 #[tokio::test]
 async fn test_verify_mismatch() {
     let fetcher = Fetcher::new();

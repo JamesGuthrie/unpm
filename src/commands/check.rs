@@ -55,6 +55,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
     let cve_checker = CveChecker::with_client(client.clone());
     let registry = Registry::with_client(client);
 
+    // r[impl check.empty]
     if manifest.dependencies.is_empty() {
         println!("No dependencies to check.");
         return Ok(());
@@ -69,6 +70,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
 
         let locked = match lockfile.dependencies.get(name) {
             Some(l) => l,
+            // r[impl check.integrity.lockfile-presence]
             None => {
                 integrity_errors.push(format!("  {name}: not in lockfile, run `unpm add` first"));
                 continue;
@@ -82,6 +84,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
             let local_sha256 = match std::fs::read(&file_path) {
                 Ok(bytes) => {
                     let hash = Fetcher::hash(&bytes);
+                    // r[impl check.integrity.sha-match]
                     if hash != locked_file.sha256 {
                         integrity_errors.push(format!(
                             "  {name}: SHA mismatch for {}",
@@ -90,6 +93,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                     }
                     hash
                 }
+                // r[impl check.integrity.file-exists]
                 Err(_) => {
                     integrity_errors.push(format!(
                         "  {name}: vendored file not found ({})",
@@ -99,6 +103,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 }
             };
 
+            // r[impl check.integrity.cdn-verify]
             // Queue CDN hash verification per file
             if let Ok(source) = PackageSource::from_manifest(name, dep.source()) {
                 tasks.push(CheckTask::CdnHash {
@@ -112,6 +117,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
         }
 
         // Queue CVE check per package
+        // r[impl check.cve.query]
         let source = PackageSource::from_manifest(name, dep.source()).ok();
         let cve_name = match &source {
             Some(PackageSource::Npm(n)) => n.clone(),
@@ -198,6 +204,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 }
             }
         })
+        // r[impl check.concurrency]
         .buffer_unordered(5)
         .collect()
         .await;
@@ -215,9 +222,11 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 Ok(vulns) => {
                     let unignored: Vec<_> = vulns
                         .iter()
+                        // r[impl check.cve.ignore]
                         .filter(|v| !ignore_cves.contains(&v.id))
                         .collect();
 
+                    // r[impl check.cve.allow-vulnerable]
                     if !unignored.is_empty() && !allow_vulnerable {
                         for vuln in &unignored {
                             vulnerabilities
@@ -225,6 +234,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                         }
                     }
                 }
+                // r[impl check.cve.query-error]
                 Err(e) => {
                     vulnerabilities.push(format!("  {name}: could not check CVEs: {e}"));
                 }
@@ -239,6 +249,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                         integrity_errors
                             .push(format!("  {name}: vendored file does not match CDN hash"));
                     }
+                    // r[impl check.integrity.cdn-decode-failure]
                     None => {
                         integrity_errors.push(format!(
                             "  {name}: could not decode CDN hash (invalid base64)"
@@ -246,10 +257,12 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                     }
                     _ => {}
                 },
+                // r[impl check.integrity.cdn-missing-file]
                 Ok(None) => {
                     integrity_errors
                         .push(format!("  {name}: file not found on CDN for verification"));
                 }
+                // r[impl check.integrity.cdn-network-error]
                 Err(e) => {
                     integrity_errors.push(format!("  {name}: could not verify against CDN: {e}"));
                 }
@@ -259,6 +272,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 current,
                 latest,
             } => {
+                // r[impl check.freshness.compare]
                 if let Some(latest) = latest
                     && latest != current
                 {
@@ -286,20 +300,24 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
         has_errors = true;
     }
 
+    // r[impl check.freshness.print]
     if !outdated.is_empty() {
         println!("Outdated:");
         for msg in &outdated {
             println!("{msg}");
         }
+        // r[impl check.freshness.fail-on-outdated]
         if fail_on_outdated {
             has_errors = true;
         }
     }
 
+    // r[impl check.exit.failure]
     if has_errors {
         anyhow::bail!("Check failed.");
     }
 
+    // r[impl check.exit.success]
     println!("All checks passed.");
     Ok(())
 }

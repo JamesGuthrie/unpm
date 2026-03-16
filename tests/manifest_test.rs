@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use unpm::manifest::{Dependency, Manifest};
 
+// r[verify manifest.dep.short]
 #[test]
 fn parse_short_form() {
     let toml = r#"
@@ -11,10 +12,11 @@ fn parse_short_form() {
     let dep = &manifest.dependencies["htmx.org"];
     assert_eq!(dep.version(), "2.0.4");
     assert_eq!(dep.file(), None);
-    assert_eq!(dep.url(), None);
+
     assert!(dep.ignore_cves().is_empty());
 }
 
+// r[verify manifest.dep.extended]
 #[test]
 fn parse_extended_form_with_file() {
     let toml = r#"
@@ -25,22 +27,9 @@ d3 = { version = "7.9.0", file = "dist/d3.min.js" }
     let dep = &manifest.dependencies["d3"];
     assert_eq!(dep.version(), "7.9.0");
     assert_eq!(dep.file(), Some("dist/d3.min.js"));
-    assert_eq!(dep.url(), None);
 }
 
-#[test]
-fn parse_url_form() {
-    let toml = r#"
-[dependencies]
-some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
-"#;
-    let manifest: Manifest = toml::from_str(toml).unwrap();
-    let dep = &manifest.dependencies["some-lib"];
-    assert_eq!(dep.version(), "1.0.0");
-    assert_eq!(dep.url(), Some("https://example.com/lib.min.js"));
-    assert_eq!(dep.file(), None);
-}
-
+// r[verify manifest.field.ignore-cves]
 #[test]
 fn parse_ignore_cves() {
     let toml = r#"
@@ -52,6 +41,8 @@ d3 = { version = "7.9.0", file = "dist/d3.min.js", ignore-cves = ["CVE-2024-1234
     assert_eq!(dep.ignore_cves(), &["CVE-2024-1234"]);
 }
 
+// r[verify manifest.serial.short]
+// r[verify manifest.serial.extended]
 #[test]
 fn roundtrip_serialization() {
     let toml_input = r#"
@@ -77,16 +68,17 @@ d3 = { version = "7.9.0", file = "dist/d3.min.js" }
     );
 }
 
+// r[verify manifest.dep.short]
+// r[verify manifest.dep.extended]
 #[test]
 fn mixed_short_and_extended() {
     let toml = r#"
 [dependencies]
 "htmx.org" = "2.0.4"
 d3 = { version = "7.9.0", file = "dist/d3.min.js" }
-some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
 "#;
     let manifest: Manifest = toml::from_str(toml).unwrap();
-    assert_eq!(manifest.dependencies.len(), 3);
+    assert_eq!(manifest.dependencies.len(), 2);
 
     assert!(matches!(
         manifest.dependencies["htmx.org"],
@@ -98,6 +90,7 @@ some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
     ));
 }
 
+// r[verify manifest.source.github-prefix]
 #[test]
 fn parse_github_source() {
     let toml = r#"
@@ -110,6 +103,7 @@ fn parse_github_source() {
     assert_eq!(dep.file(), Some("packages/alpine/dist/cdn.min.js"));
 }
 
+// r[verify manifest.serial.key-quoting]
 #[test]
 fn inline_table_format_roundtrips() {
     // Verify that inline TOML table format parses correctly
@@ -128,6 +122,7 @@ fn inline_table_format_roundtrips() {
 
 // Task 3 tests
 
+// r[verify manifest.dep.extended]
 #[test]
 fn parse_files_form() {
     let toml = r#"
@@ -149,6 +144,7 @@ uplot = { version = "1.6.31", files = ["dist/uPlot.min.js", "dist/uPlot.min.css"
     assert_eq!(dep.file(), None);
 }
 
+// r[verify manifest.dep.extended]
 #[test]
 fn files_single_element_valid() {
     let toml = r#"
@@ -160,6 +156,7 @@ uplot = { version = "1.6.31", files = ["dist/uPlot.min.js"] }
     assert_eq!(dep.files(), Some(&["dist/uPlot.min.js".to_string()][..]));
 }
 
+// r[verify manifest.serial.extended]
 #[test]
 fn save_roundtrip_with_files() {
     let dir = tempfile::tempdir().unwrap();
@@ -176,7 +173,7 @@ fn save_roundtrip_with_files() {
                     "dist/uPlot.min.js".to_string(),
                     "dist/uPlot.min.css".to_string(),
                 ]),
-                url: None,
+
                 ignore_cves: Vec::new(),
             },
         )]),
@@ -198,6 +195,7 @@ fn save_roundtrip_with_files() {
     assert_eq!(dep.file(), None);
 }
 
+// r[verify manifest.validation.file-files]
 #[test]
 fn reject_file_and_files() {
     let toml = r#"
@@ -212,20 +210,7 @@ uplot = { version = "1.6.31", file = "dist/uPlot.min.js", files = ["dist/uPlot.m
     );
 }
 
-#[test]
-fn reject_url_and_files() {
-    let toml = r#"
-[dependencies]
-uplot = { version = "1.6.31", url = "https://example.com/lib.js", files = ["dist/uPlot.min.css"] }
-"#;
-    let manifest: Manifest = toml::from_str(toml).unwrap();
-    let err = manifest.validate().unwrap_err();
-    assert!(
-        err.to_string().contains("mutually exclusive"),
-        "expected mutually exclusive error, got: {err}"
-    );
-}
-
+// r[verify manifest.validation.files-empty]
 #[test]
 fn reject_empty_files() {
     let toml = r#"

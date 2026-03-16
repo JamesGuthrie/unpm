@@ -76,6 +76,9 @@ fn test_github_file_url() {
     );
 }
 
+// r[verify manifest.source.default]
+// r[verify manifest.source.github-prefix]
+// r[verify add.resolution.github-validation]
 #[test]
 fn test_parse_package_source() {
     let npm = PackageSource::parse("htmx.org").unwrap();
@@ -95,6 +98,7 @@ fn test_parse_package_source() {
     assert!(PackageSource::parse("gh:user/").is_err());
 }
 
+// r[verify add.resolution.source]
 #[test]
 fn test_package_source_display() {
     let npm = PackageSource::parse("htmx.org").unwrap();

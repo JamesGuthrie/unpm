@@ -59,6 +59,7 @@ impl CveChecker {
     }
 
     pub async fn check(&self, package_name: &str, version: &str) -> Result<Vec<Vulnerability>> {
+        // r[impl check.cve.query]
         let body = ApiRequest {
             package: ApiPackage {
                 name: package_name.to_string(),

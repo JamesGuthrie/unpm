@@ -12,6 +12,8 @@ use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) -> Result<()> {
+    // r[impl add.input.version-flag]
+    // r[impl add.input.at-syntax]
     let (package, version) = match version {
         Some(_) => (package, version),
         None => match package.rsplit_once('@') {
@@ -22,10 +24,12 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
 
     let interactive = std::io::stdin().is_terminal();
 
+    // r[impl add.noninteractive.required-flags]
     if !interactive && (version.is_none() || files_flag.is_empty()) {
         bail!("Non-interactive mode requires both --version and --file flags");
     }
 
+    // r[impl add.input.source]
     let source = PackageSource::parse(package)?;
     let manifest_key = source.display_name();
     let client = reqwest::Client::new();
@@ -37,6 +41,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     let mut lockfile = Lockfile::load()?;
     let existing = manifest.dependencies.get(&manifest_key);
 
+    // r[impl add.existing.version-conflict]
     if let Some(existing_dep) = existing
         && let Some(v) = version
         && v != existing_dep.version()
@@ -53,6 +58,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     let pkg_info = registry.get_package(&source).await?;
 
     // Step 2: Select version
+    // r[impl add.existing.preserve-version]
     let selected_version = if let Some(existing_dep) = existing {
         existing_dep.version().to_string()
     } else {
@@ -86,6 +92,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         .filter(|f| !existing_file_paths.contains(f))
         .collect();
 
+    // r[impl add.existing.already-vendored]
     if new_files.is_empty() && existing.is_some() {
         println!("All specified files are already vendored for {manifest_key}.");
         return Ok(());
@@ -96,6 +103,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     let output_dir = Path::new(&config.output_dir);
     let mut fetched_files: Vec<(String, LockedFile, Vec<u8>)> = Vec::new();
 
+    // r[impl add.vendor.fetch-before-write]
     for file_path in &new_files {
         let url = Registry::file_url(&source, &selected_version, file_path);
         println!("Fetching {url}...");
@@ -127,7 +135,8 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         ));
     }
 
-    // Step 6: Confirm (if interactive and version wasn't pre-specified)
+    // r[impl add.confirm.prompt]
+    // r[impl add.confirm.skip]
     if interactive && version.is_none() && existing.is_none() {
         println!();
         println!("  Package:  {source}");
@@ -144,6 +153,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
             .default(true)
             .interact()?;
 
+        // r[impl add.confirm.abort]
         if !confirm {
             println!("Aborted.");
             return Ok(());
@@ -162,29 +172,33 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         .chain(new_files.iter().map(|s| s.as_str()))
         .collect();
 
+    // r[impl add.manifest.preserve-fields]
     let existing_source = existing.and_then(|d| d.source().map(|s| s.to_string()));
     let existing_cves = existing
         .map(|d| d.ignore_cves().to_vec())
         .unwrap_or_default();
 
+    // r[impl add.manifest.short-form]
     let dep = if all_file_paths.len() == 1 && default_path == Some(all_file_paths[0]) {
         Dependency::Short(selected_version.clone())
+    // r[impl add.manifest.extended-file]
     } else if all_file_paths.len() == 1 {
         Dependency::Extended {
             version: selected_version.clone(),
             source: existing_source.clone(),
             file: Some(all_file_paths[0].to_string()),
             files: None,
-            url: None,
+
             ignore_cves: existing_cves.clone(),
         }
+    // r[impl add.manifest.extended-files]
     } else {
         Dependency::Extended {
             version: selected_version.clone(),
             source: existing_source.clone(),
             file: None,
             files: Some(all_file_paths.iter().map(|s| s.to_string()).collect()),
-            url: None,
+
             ignore_cves: existing_cves.clone(),
         }
     };
@@ -193,6 +207,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     manifest.save()?;
 
     // Step 8: Update lockfile
+    // r[impl add.existing.preserve-files]
     let mut all_locked_files: Vec<LockedFile> = lockfile
         .dependencies
         .get(&manifest_key)
@@ -216,6 +231,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         vendor::place_file(output_dir, &locked_file.filename, bytes)?;
     }
 
+    // r[impl add.vendor.canonical-cleanup]
     vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
     if new_files.len() == 1 {
@@ -249,11 +265,12 @@ fn resolve_filename(
         .chain(batch.iter().map(|(_, f, _)| f.filename.as_str()))
         .collect();
 
+    // r[impl add.filename.batch-awareness]
     if !existing_filenames.contains(&original) {
         return original.to_string();
     }
 
-    // Check if collision is intra-package (same batch has same basename)
+    // r[impl add.filename.intra-package]
     let batch_has_same_basename = batch.iter().any(|(_, f, _)| {
         Path::new(&f.filename)
             .file_name()
@@ -273,7 +290,7 @@ fn resolve_filename(
         }
     }
 
-    // Cross-package collision: namespace with package name
+    // r[impl add.filename.cross-package]
     format!("{}_{}", manifest_key.replace(['/', ':'], "-"), original)
 }
 
@@ -284,8 +301,9 @@ fn select_files(
     existing_files: &[String],
 ) -> Result<Vec<String>> {
     if !files_flag.is_empty() {
-        // Validate all specified files exist
+        // r[impl add.noninteractive.file-validation]
         for f in files_flag {
+            // r[impl add.noninteractive.path-normalization]
             let path = f.strip_prefix('/').unwrap_or(f);
             if !pkg_files.files.iter().any(|fe| fe.path == path) {
                 bail!("File {f} not found in package");
@@ -314,6 +332,7 @@ fn select_files(
         return interactive_multi_select(pkg_files, existing_files);
     }
 
+    // r[impl add.files.default-offer]
     if let Some(ref default) = default_path {
         let items = &[
             format!("Use default entry point ({default})"),
@@ -326,7 +345,7 @@ fn select_files(
             .interact()?;
 
         if selection == 0 {
-            // Check for min counterpart
+            // r[impl add.files.min-counterpart]
             let file_paths: Vec<&str> = pkg_files.files.iter().map(|f| f.path.as_str()).collect();
             let final_file =
                 if let Some((min_file, full_file)) = find_min_counterpart(default, &file_paths) {
@@ -374,12 +393,14 @@ fn interactive_multi_select(
         .map(|f| existing_files.contains(&f.path))
         .collect();
 
+    // r[impl add.files.multi-select]
     let selections = MultiSelect::new()
         .with_prompt("Select file(s) (space to toggle, enter to confirm)")
         .items(&file_labels)
         .defaults(&defaults)
         .interact()?;
 
+    // r[impl add.files.no-selection]
     if selections.is_empty() {
         bail!("No files selected");
     }
@@ -412,12 +433,14 @@ fn select_version(
     interactive: bool,
 ) -> Result<String> {
     if let Some(v) = version_flag {
+        // r[impl add.version.validation]
         if !pkg_info.versions.iter().any(|vi| vi.version == v) {
             bail!("Version {v} not found for {}", pkg_info.name);
         }
         return Ok(v.to_string());
     }
 
+    // r[impl add.version.default]
     let stable = latest_stable(&pkg_info.versions);
     let default_version = pkg_info
         .tags
@@ -443,6 +466,7 @@ fn select_version(
         return Ok(default_version.to_string());
     }
 
+    // r[impl add.version.list]
     let versions = sorted_versions(&pkg_info.versions);
 
     let selection = Select::new()
@@ -454,6 +478,7 @@ fn select_version(
     Ok(versions[selection].to_string())
 }
 
+// r[impl add.files.default-resolution]
 fn resolve_default_path(default: &str, files: &[crate::registry::FileEntry]) -> String {
     if files.iter().any(|f| f.path == default) {
         return default.to_string();

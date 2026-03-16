@@ -9,6 +9,7 @@ use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
 
 pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) -> Result<()> {
+    // r[impl update.target.at-syntax]
     // Parse package@version syntax
     let (package, version) = match package {
         Some(pkg) => match version {
@@ -19,6 +20,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             },
         },
         None => {
+            // r[impl update.target.version-requires-package]
             if version.is_some() {
                 bail!("--version requires a package name");
             }
@@ -36,11 +38,13 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
 
     let packages: Vec<String> = match package {
         Some(pkg) => {
+            // r[impl update.precondition.in-manifest]
             if !manifest.dependencies.contains_key(pkg) {
                 bail!("Package '{pkg}' not found in dependencies");
             }
             vec![pkg.to_string()]
         }
+        // r[impl update.target.all]
         None => manifest.dependencies.keys().cloned().collect(),
     };
 
@@ -49,6 +53,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let locked = lockfile
             .dependencies
             .get(name.as_str())
+            // r[impl update.precondition.in-lockfile]
             .ok_or_else(|| anyhow::anyhow!("'{name}' not found in lockfile"))?
             .clone();
 
@@ -56,6 +61,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let old_version = dep.version().to_string();
 
         let new_version = match version {
+            // r[impl update.version.explicit]
             Some(v) => v.to_string(),
             None => {
                 let pkg_info = registry.get_package(&source).await?;
@@ -63,6 +69,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
 
                 match current_major {
                     Some(major) if !latest => {
+                        // r[impl update.version.major-boundary]
                         match latest_compatible(&pkg_info.versions, major) {
                             Some(v) => {
                                 // If already at latest compatible, check if a newer major exists
@@ -70,6 +77,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                                     if let Some(abs_latest) = latest_stable(&pkg_info.versions)
                                         && abs_latest != old_version
                                     {
+                                        // r[impl update.version.held-back]
                                         println!(
                                             "{name}: {old_version} held back \
                                              ({abs_latest} available, use --latest to update across major versions)"
@@ -82,6 +90,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                             None => continue,
                         }
                     }
+                    // r[impl update.version.latest-flag]
                     _ => {
                         match pkg_info
                             .tags
@@ -97,6 +106,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         };
 
         if new_version == old_version {
+            // r[impl update.version.already-current-single]
+            // r[impl update.version.already-current-all]
             if package.is_some() {
                 println!("{name} is already at {old_version}");
             }
@@ -108,12 +119,15 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             bytes: Vec<u8>,
         }
 
+        // r[impl update.files.atomic]
         let mut fetched: Vec<FetchedFile> = Vec::new();
+        // r[impl update.files.path-extraction]
         for locked_file in &locked.files {
             let file_path = crate::url::extract_file_path(&locked_file.url, &old_version)?;
             let url = Registry::file_url(&source, &new_version, &file_path);
             let result = match fetcher.fetch(&url).await {
                 Ok(r) => r,
+                // r[impl update.files.fetch-failure]
                 Err(e) => bail!(
                     "{name}: failed to fetch '{file_path}' at version {new_version}: {e}\nAdjust the `files` list in unpm.toml and retry."
                 ),
@@ -130,12 +144,13 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         }
 
         let new_dep = match dep {
+            // r[impl update.manifest.short-form]
             Dependency::Short(_) => Dependency::Short(new_version.clone()),
+            // r[impl update.manifest.extended-form]
             Dependency::Extended {
                 source,
                 file,
                 files,
-                url: url_override,
                 ignore_cves,
                 ..
             } => Dependency::Extended {
@@ -143,7 +158,6 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                 source: source.clone(),
                 file: file.clone(),
                 files: files.clone(),
-                url: url_override.clone(),
                 ignore_cves: ignore_cves.clone(),
             },
         };
@@ -158,14 +172,19 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         );
 
         for f in &fetched {
+            // r[impl update.vendor.placement]
             vendor::place_file(output_dir, &f.locked.filename, &f.bytes)?;
         }
+        // r[impl update.output.success]
         println!("{name}: {old_version} -> {new_version}");
     }
 
+    // r[impl update.persist.manifest]
     manifest.save()?;
+    // r[impl update.persist.lockfile]
     lockfile.save()?;
 
+    // r[impl update.vendor.cleanup]
     vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
     Ok(())

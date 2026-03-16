@@ -18,12 +18,14 @@ pub fn extract_file_path(url: &str, version: &str) -> Result<String> {
 mod tests {
     use super::*;
 
+    // r[verify update.files.path-extraction]
     #[test]
     fn extracts_npm_path() {
         let url = "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js";
         assert_eq!(extract_file_path(url, "2.0.4").unwrap(), "dist/htmx.min.js");
     }
 
+    // r[verify update.files.path-extraction]
     #[test]
     fn extracts_github_path() {
         let url = "https://cdn.jsdelivr.net/gh/user/repo@1.0.0/dist/lib.js";

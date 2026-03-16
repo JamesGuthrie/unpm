@@ -1,5 +1,6 @@
 use unpm::lockfile::{LockedDependency, LockedFile, Lockfile};
 
+// r[verify lockfile.file.missing]
 #[test]
 fn empty_lockfile() {
     let lockfile = Lockfile::default();
@@ -8,6 +9,8 @@ fn empty_lockfile() {
     assert_eq!(json, "{}");
 }
 
+// r[verify lockfile.serialization.roundtrip]
+// r[verify lockfile.structure.file-entry]
 #[test]
 fn roundtrip_json() {
     let mut lockfile = Lockfile::default();
@@ -36,6 +39,8 @@ fn roundtrip_json() {
     assert_eq!(dep.files[0].filename, "htmx.org_htmx.min.js");
 }
 
+// r[verify lockfile.structure.top-level]
+// r[verify lockfile.structure.dependency]
 #[test]
 fn from_json_string() {
     let json = r#"{
@@ -58,6 +63,7 @@ fn from_json_string() {
     );
 }
 
+// r[verify lockfile.serialization.canonical]
 #[test]
 fn new_format_roundtrip() {
     let mut lockfile = Lockfile::default();
@@ -80,6 +86,7 @@ fn new_format_roundtrip() {
     assert_eq!(reparsed.dependencies["alpine"].files[0].sha256, "def456");
 }
 
+// r[verify lockfile.structure.multi-file]
 #[test]
 fn new_format_multi_file() {
     let mut lockfile = Lockfile::default();
@@ -114,6 +121,7 @@ fn new_format_multi_file() {
     assert_eq!(dep.files[1].filename, "bootstrap_bootstrap.min.css");
 }
 
+// r[verify lockfile.migration.old-format]
 #[test]
 fn migrate_old_format() {
     let json = r#"{
@@ -138,6 +146,7 @@ fn migrate_old_format() {
     assert_eq!(dep.files[0].filename, "htmx.org_htmx.min.js");
 }
 
+// r[verify lockfile.migration.conflict]
 #[test]
 fn reject_corrupt_lockfile_both_formats() {
     let json = r#"{
@@ -164,6 +173,7 @@ fn reject_corrupt_lockfile_both_formats() {
     );
 }
 
+// r[verify lockfile.migration.no-file-data]
 #[test]
 fn reject_lockfile_entry_with_no_file_data() {
     let json = r#"{

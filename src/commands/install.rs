@@ -14,11 +14,13 @@ pub async fn install() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     let fetcher = Fetcher::with_client(client);
 
+    // r[impl install.preconditions.empty-manifest]
     if manifest.dependencies.is_empty() {
         println!("No dependencies to install.");
         return Ok(());
     }
 
+    // r[impl install.fetch.progress-total]
     let total_files: u64 = lockfile
         .dependencies
         .values()
@@ -32,22 +34,20 @@ pub async fn install() -> anyhow::Result<()> {
     );
     pb.set_message("Installing");
 
-    for (name, dep) in &manifest.dependencies {
+    for name in manifest.dependencies.keys() {
+        // r[impl install.preconditions.missing-lock-entry]
         let locked = lockfile.dependencies.get(name).ok_or_else(|| {
             anyhow::anyhow!("'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first.")
         })?;
 
         for locked_file in &locked.files {
-            // Use custom URL from manifest if specified (single-file deps only)
-            let url = if locked.files.len() == 1 {
-                dep.url().unwrap_or(&locked_file.url)
-            } else {
-                &locked_file.url
-            };
+            let url = &locked_file.url;
 
             let result = fetcher.fetch(url).await?;
 
+            // r[impl install.integrity.sha256]
             if !Fetcher::verify(&result.bytes, &locked_file.sha256) {
+                // r[impl install.integrity.mismatch]
                 anyhow::bail!(
                     "SHA mismatch for {name} ({})!\nExpected: {}\nGot:      {}",
                     locked_file.filename,
@@ -56,6 +56,7 @@ pub async fn install() -> anyhow::Result<()> {
                 );
             }
 
+            // r[impl install.vendor.placement]
             vendor::place_file(output_dir, &locked_file.filename, &result.bytes)?;
             pb.inc(1);
         }
@@ -63,8 +64,10 @@ pub async fn install() -> anyhow::Result<()> {
 
     pb.finish_with_message("Done");
 
+    // r[impl install.vendor.canonical-cleanup]
     vendor::clean_if_canonical(&config, &lockfile, output_dir)?;
 
+    // r[impl install.vendor.success-message]
     println!(
         "Installed {} dependencies to {}",
         manifest.dependencies.len(),

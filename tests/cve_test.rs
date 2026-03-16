@@ -7,6 +7,7 @@ async fn test_check_no_vulnerabilities() {
     assert!(vulns.is_empty());
 }
 
+// r[verify check.cve.query]
 #[tokio::test]
 async fn test_check_known_vulnerability() {
     let checker = CveChecker::new();

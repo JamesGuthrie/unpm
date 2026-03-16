@@ -12,10 +12,12 @@ pub enum PackageSource {
 impl PackageSource {
     /// Parse a package specifier: "gh:user/repo" for GitHub, anything else for npm.
     pub fn parse(input: &str) -> Result<Self> {
+        // r[impl manifest.source.github-prefix]
         if let Some(gh) = input.strip_prefix("gh:") {
             let (user, repo) = gh.split_once('/').ok_or_else(|| {
                 anyhow::anyhow!("GitHub source must be 'gh:user/repo', got '{input}'")
             })?;
+            // r[impl add.input.github-validation]
             if user.is_empty() || repo.is_empty() {
                 bail!("GitHub source must be 'gh:user/repo', got '{input}'");
             }
@@ -24,6 +26,8 @@ impl PackageSource {
                 repo: repo.to_string(),
             })
         } else {
+            // r[impl manifest.source.default]
+            // r[impl add.input.source]
             Ok(Self::Npm(input.to_string()))
         }
     }
@@ -64,6 +68,7 @@ impl PackageSource {
     /// Keys starting with "gh:" are GitHub packages, everything else is npm.
     pub fn from_manifest(name: &str, source: Option<&str>) -> Result<Self> {
         // Explicit source field takes precedence (backwards compat)
+        // r[impl manifest.source.field]
         if let Some(s) = source {
             return Self::parse(s);
         }
@@ -209,6 +214,7 @@ impl Registry {
         let resp = self.client.get(&url).send().await?;
         log::debug!("  -> {}", resp.status());
 
+        // r[impl add.resolve.not-found]
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             bail!("Package not found: {source}");
         }

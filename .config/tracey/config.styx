@@ -1,0 +1,14 @@
+specs (
+  {
+    name unpm
+    include (docs/specs/**/*.md)
+    impls (
+      {
+        name rust
+        include (src/**/*.rs)
+        exclude (target/**)
+        test_include (tests/**/*.rs)
+      }
+    )
+  }
+)

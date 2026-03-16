@@ -2,6 +2,7 @@ use std::fs;
 use tempfile::TempDir;
 use unpm::vendor;
 
+// r[verify install.vendor.placement]
 #[test]
 fn test_place_file() {
     let dir = TempDir::new().unwrap();
@@ -11,6 +12,7 @@ fn test_place_file() {
     assert_eq!(written, b"fake content");
 }
 
+// r[verify add.vendor.output-directory]
 #[test]
 fn test_place_file_creates_dirs() {
     let dir = TempDir::new().unwrap();
