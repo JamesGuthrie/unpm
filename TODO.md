@@ -5,3 +5,4 @@
 - [x] remove url from manifest
 - [x] implement GIT ecosystem CVE check
 - [ ] specify 'stable' version and clean up in specs
+- [ ] integration tests
