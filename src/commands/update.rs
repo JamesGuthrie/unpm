@@ -60,17 +60,25 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let source = PackageSource::from_manifest(name, dep.source())?;
         let old_version = dep.version().to_string();
 
-        let new_version = match version {
+        let (manifest_version, lockfile_version) = match version {
             // r[impl update.version.explicit]
-            Some(v) => v.to_string(),
+            // r[impl update.version.github-resolve]
+            Some(v) => {
+                if matches!(source, PackageSource::GitHub { .. }) {
+                    let resolved = registry.resolve_github_ref(&source, v).await?;
+                    (resolved.manifest_version, resolved.lockfile_version)
+                } else {
+                    (v.to_string(), v.to_string())
+                }
+            }
             None => {
-                let pkg_info = registry.get_package(&source).await?;
-                let current_major = semver::Version::parse(&old_version).ok().map(|v| v.major);
+                let current_semver = semver::Version::parse(&old_version).ok();
 
-                match current_major {
-                    Some(major) if !latest => {
+                match current_semver {
+                    Some(ref sv) if !latest => {
+                        let pkg_info = registry.get_package(&source).await?;
                         // r[impl update.version.major-boundary]
-                        match latest_compatible(&pkg_info.versions, major) {
+                        match latest_compatible(&pkg_info.versions, sv.major) {
                             Some(v) => {
                                 // If already at latest compatible, check if a newer major exists
                                 if v == old_version {
@@ -85,19 +93,39 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                                     }
                                     continue;
                                 }
-                                v
+                                // r[impl update.version.github-resolve]
+                                if matches!(source, PackageSource::GitHub { .. }) {
+                                    let resolved = registry.resolve_github_ref(&source, &v).await?;
+                                    (v, resolved.lockfile_version)
+                                } else {
+                                    (v.clone(), v)
+                                }
                             }
                             None => continue,
                         }
                     }
+                    None if matches!(source, PackageSource::GitHub { .. }) => {
+                        // r[impl update.version.github-resolve]
+                        let resolved = registry.resolve_github_ref(&source, &old_version).await?;
+                        (old_version.clone(), resolved.lockfile_version)
+                    }
                     // r[impl update.version.latest-flag]
                     _ => {
+                        let pkg_info = registry.get_package(&source).await?;
                         match pkg_info
                             .tags
                             .latest
                             .or_else(|| latest_stable(&pkg_info.versions))
                         {
-                            Some(v) => v,
+                            Some(v) => {
+                                // r[impl update.version.github-resolve]
+                                if matches!(source, PackageSource::GitHub { .. }) {
+                                    let resolved = registry.resolve_github_ref(&source, &v).await?;
+                                    (v, resolved.lockfile_version)
+                                } else {
+                                    (v.clone(), v)
+                                }
+                            }
                             None => continue,
                         }
                     }
@@ -105,7 +133,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             }
         };
 
-        if new_version == old_version {
+        if lockfile_version == locked.version {
             // r[impl update.version.already-current-single]
             // r[impl update.version.already-current-all]
             if package.is_some() {
@@ -123,13 +151,13 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let mut fetched: Vec<FetchedFile> = Vec::new();
         // r[impl update.files.path-extraction]
         for locked_file in &locked.files {
-            let file_path = crate::url::extract_file_path(&locked_file.url, &old_version)?;
-            let url = Registry::file_url(&source, &new_version, &file_path);
+            let file_path = crate::url::extract_file_path(&locked_file.url, &locked.version)?;
+            let url = Registry::file_url(&source, &lockfile_version, &file_path);
             let result = match fetcher.fetch(&url).await {
                 Ok(r) => r,
                 // r[impl update.files.fetch-failure]
                 Err(e) => bail!(
-                    "{name}: failed to fetch '{file_path}' at version {new_version}: {e}\nAdjust the `files` list in unpm.toml and retry."
+                    "{name}: failed to fetch '{file_path}' at version {lockfile_version}: {e}\nAdjust the `files` list in unpm.toml and retry."
                 ),
             };
             fetched.push(FetchedFile {
@@ -145,7 +173,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
 
         let new_dep = match dep {
             // r[impl update.manifest.short-form]
-            Dependency::Short(_) => Dependency::Short(new_version.clone()),
+            Dependency::Short(_) => Dependency::Short(manifest_version.clone()),
             // r[impl update.manifest.extended-form]
             Dependency::Extended {
                 source,
@@ -154,7 +182,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                 ignore_cves,
                 ..
             } => Dependency::Extended {
-                version: new_version.clone(),
+                version: manifest_version.clone(),
                 source: source.clone(),
                 file: file.clone(),
                 files: files.clone(),
@@ -166,7 +194,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         lockfile.dependencies.insert(
             name.clone(),
             LockedDependency {
-                version: new_version.clone(),
+                version: lockfile_version.clone(),
                 files: fetched.iter().map(|f| f.locked.clone()).collect(),
             },
         );
@@ -176,7 +204,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             vendor::place_file(output_dir, &f.locked.filename, &f.bytes)?;
         }
         // r[impl update.output.success]
-        println!("{name}: {old_version} -> {new_version}");
+        println!("{name}: {old_version} -> {manifest_version}");
     }
 
     // r[impl update.persist.manifest]

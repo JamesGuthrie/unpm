@@ -98,6 +98,55 @@ fn test_parse_package_source() {
     assert!(PackageSource::parse("gh:user/").is_err());
 }
 
+// r[verify add.version.github-ref]
+#[tokio::test]
+async fn test_resolve_github_ref_commit_sha() {
+    let registry = Registry::new();
+    let source = PackageSource::parse("gh:jquery/jquery").unwrap();
+    // Known commit SHA from jquery repo
+    let sha = "32b00373b3f42e5cdcb709df53f3b08b7184a944";
+    let result = registry.resolve_github_ref(&source, sha).await.unwrap();
+    // SHA resolves directly via GitHub API — manifest and lockfile both get the SHA
+    assert_eq!(result.manifest_version, sha);
+    assert_eq!(result.lockfile_version, sha);
+}
+
+// r[verify add.version.github-resolve]
+// r[verify update.version.github-resolve]
+#[tokio::test]
+async fn test_resolve_github_ref_branch_name() {
+    let registry = Registry::new();
+    let source = PackageSource::parse("gh:jquery/jquery").unwrap();
+    let result = registry.resolve_github_ref(&source, "main").await.unwrap();
+    // Branch name goes in manifest, resolved SHA goes in lockfile
+    assert_eq!(result.manifest_version, "main");
+    assert_ne!(result.lockfile_version, "main");
+    assert_eq!(result.lockfile_version.len(), 40); // full SHA
+}
+
+// r[verify add.version.github-resolve]
+// r[verify update.version.github-resolve]
+#[tokio::test]
+async fn test_resolve_github_ref_semver_tag() {
+    let registry = Registry::new();
+    let source = PackageSource::parse("gh:jquery/jquery").unwrap();
+    let result = registry.resolve_github_ref(&source, "3.7.1").await.unwrap();
+    // Semver tag: manifest stores the tag, lockfile stores the resolved SHA
+    assert_eq!(result.manifest_version, "3.7.1");
+    assert_ne!(result.lockfile_version, "3.7.1");
+    assert_eq!(result.lockfile_version.len(), 40);
+}
+
+#[tokio::test]
+async fn test_resolve_github_ref_not_found() {
+    let registry = Registry::new();
+    let source = PackageSource::parse("gh:jquery/jquery").unwrap();
+    let result = registry
+        .resolve_github_ref(&source, "this-ref-does-not-exist-xyz")
+        .await;
+    assert!(result.is_err());
+}
+
 // r[verify add.resolution.source]
 #[test]
 fn test_package_source_display() {

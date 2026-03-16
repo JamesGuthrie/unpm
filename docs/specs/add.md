@@ -46,8 +46,8 @@ An explicitly specified version MUST exist in the package's version list. The co
 r[add.version.github-ref]
 For GitHub packages, the `--version` flag and `@` syntax also accept any valid git ref (commit SHA or branch name) that does not appear in the version list.
 
-r[add.version.github-branch-resolve]
-When a GitHub package version is a branch name, the lockfile MUST record the resolved commit SHA, not the branch name. The manifest MUST record the original branch name as specified by the user.
+r[add.version.github-resolve]
+For GitHub packages, the lockfile MUST always record the resolved commit SHA, regardless of whether the version is a semver tag, branch name, or commit SHA. The manifest MUST record the original version string as specified by the user.
 
 r[add.version.default]
 When no version is specified, the command MUST offer a default version. The default MUST be the `latest` tag if present, otherwise the highest stable (non-prerelease) semver version, otherwise the first version in descending semver order.

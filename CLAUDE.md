@@ -12,5 +12,3 @@
   Common prefixes: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`. Use `!` after the prefix for breaking changes (e.g. `feat!:`).
 - **One commit per feature.** Do not commit after each task or implementation step. Make a single, self-contained commit when the feature is complete, all tests pass, and the code compiles. This avoids dead code from intermediate states.
 - The only exception is documentation-only commits (ADR, design doc) that precede implementation — these may be committed separately if the feature spans multiple sessions.
-
-

@@ -53,10 +53,10 @@ An explicit version (via `@` syntax or `--version`) MUST be used
 as-is, bypassing both the major version constraint and registry
 lookup.
 
-r[update.version.github-branch-resolve]
-When a GitHub package's manifest version is a branch name, the command
-MUST re-resolve the branch to the current commit SHA and update the
-lockfile accordingly.
+r[update.version.github-resolve]
+When updating a GitHub package, the command MUST resolve the target
+version (whether semver tag, branch name, or commit SHA) to a commit
+SHA via the GitHub API and record it in the lockfile.
 
 r[update.version.already-current-single]
 When updating a single named package that is already at the target

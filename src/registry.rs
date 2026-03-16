@@ -83,6 +83,14 @@ impl fmt::Display for PackageSource {
     }
 }
 
+/// The result of resolving a GitHub ref (branch, SHA, or tag).
+pub struct ResolvedVersion {
+    /// What the manifest should store (user's original input).
+    pub manifest_version: String,
+    /// What the lockfile should store (resolved SHA or tag).
+    pub lockfile_version: String,
+}
+
 pub struct Registry {
     client: reqwest::Client,
 }
@@ -190,6 +198,7 @@ pub fn latest_stable(versions: &[VersionInfo]) -> Option<String> {
 
 const API_BASE: &str = "https://data.jsdelivr.com/v1/packages";
 const CDN_BASE: &str = "https://cdn.jsdelivr.net";
+const GITHUB_API_BASE: &str = "https://api.github.com";
 
 impl Default for Registry {
     fn default() -> Self {
@@ -267,5 +276,49 @@ impl Registry {
 
     pub fn file_url(source: &PackageSource, version: &str, file_path: &str) -> String {
         format!("{CDN_BASE}/{}/{file_path}", source.cdn_path(version))
+    }
+
+    // r[impl add.version.github-ref]
+    // r[impl add.version.github-resolve]
+    /// Resolve a GitHub version (tag, branch, or SHA) to a commit SHA.
+    pub async fn resolve_github_ref(
+        &self,
+        source: &PackageSource,
+        version: &str,
+    ) -> Result<ResolvedVersion> {
+        let PackageSource::GitHub { user, repo } = source else {
+            bail!("resolve_github_ref called on non-GitHub source");
+        };
+
+        let gh_url = format!("{GITHUB_API_BASE}/repos/{user}/{repo}/commits/{version}");
+        log::debug!("GET {gh_url}");
+        let resp = self
+            .client
+            .get(&gh_url)
+            .header("Accept", "application/vnd.github.sha")
+            .header("User-Agent", "unpm")
+            .send()
+            .await?;
+        log::debug!("  -> {}", resp.status());
+
+        if resp.status() == reqwest::StatusCode::FORBIDDEN {
+            bail!(
+                "GitHub API rate limit exceeded (60 requests/hour for unauthenticated requests). \
+                 Please wait and try again."
+            );
+        }
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND
+            || resp.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+        {
+            bail!("Version '{version}' not found for {source}");
+        }
+
+        let sha = resp.error_for_status()?.text().await?.trim().to_string();
+
+        Ok(ResolvedVersion {
+            manifest_version: version.to_string(),
+            lockfile_version: sha,
+        })
     }
 }

@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::fetch::Fetcher;
 use crate::lockfile::{LockedDependency, LockedFile, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{PackageSource, Registry, latest_stable};
+use crate::registry::{PackageSource, Registry, ResolvedVersion, latest_stable};
 use crate::vendor;
 
 pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) -> Result<()> {
@@ -59,16 +59,23 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
 
     // Step 2: Select version
     // r[impl add.existing.preserve-version]
-    let selected_version = if let Some(existing_dep) = existing {
-        existing_dep.version().to_string()
+    let resolved = if let Some(existing_dep) = existing {
+        ResolvedVersion {
+            manifest_version: existing_dep.version().to_string(),
+            lockfile_version: lockfile
+                .dependencies
+                .get(&manifest_key)
+                .map(|l| l.version.clone())
+                .unwrap_or_else(|| existing_dep.version().to_string()),
+        }
     } else {
-        select_version(&pkg_info, version, interactive)?
+        select_version(&pkg_info, version, interactive, &source, &registry).await?
     };
 
     // Step 3: Get file listing
-    println!("Fetching file list for {source}@{selected_version}...");
+    println!("Fetching file list for {source}@{}...", resolved.lockfile_version);
     let pkg_files = registry
-        .get_package_files(&source, &selected_version)
+        .get_package_files(&source, &resolved.lockfile_version)
         .await?;
 
     // Resolve existing files from lockfile
@@ -78,7 +85,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         .map(|l| {
             l.files
                 .iter()
-                .filter_map(|f| crate::url::extract_file_path(&f.url, &selected_version).ok())
+                .filter_map(|f| crate::url::extract_file_path(&f.url, &resolved.lockfile_version).ok())
                 .collect()
         })
         .unwrap_or_default();
@@ -105,7 +112,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
 
     // r[impl add.vendor.fetch-before-write]
     for file_path in &new_files {
-        let url = Registry::file_url(&source, &selected_version, file_path);
+        let url = Registry::file_url(&source, &resolved.lockfile_version, file_path);
         println!("Fetching {url}...");
         let result = fetcher.fetch(&url).await?;
 
@@ -140,7 +147,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     if interactive && version.is_none() && existing.is_none() {
         println!();
         println!("  Package:  {source}");
-        println!("  Version:  {selected_version}");
+        println!("  Version:  {}", resolved.manifest_version);
         for (path, locked_file, _) in &fetched_files {
             println!("  File:     {path} -> {}", locked_file.filename);
             println!("    Size:   {} bytes", locked_file.size);
@@ -179,12 +186,13 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         .unwrap_or_default();
 
     // r[impl add.manifest.short-form]
+    // r[impl add.version.github-resolve]
     let dep = if all_file_paths.len() == 1 && default_path == Some(all_file_paths[0]) {
-        Dependency::Short(selected_version.clone())
+        Dependency::Short(resolved.manifest_version.clone())
     // r[impl add.manifest.extended-file]
     } else if all_file_paths.len() == 1 {
         Dependency::Extended {
-            version: selected_version.clone(),
+            version: resolved.manifest_version.clone(),
             source: existing_source.clone(),
             file: Some(all_file_paths[0].to_string()),
             files: None,
@@ -194,7 +202,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     // r[impl add.manifest.extended-files]
     } else {
         Dependency::Extended {
-            version: selected_version.clone(),
+            version: resolved.manifest_version.clone(),
             source: existing_source.clone(),
             file: None,
             files: Some(all_file_paths.iter().map(|s| s.to_string()).collect()),
@@ -220,7 +228,7 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     lockfile.dependencies.insert(
         manifest_key.clone(),
         LockedDependency {
-            version: selected_version.clone(),
+            version: resolved.lockfile_version.clone(),
             files: all_locked_files,
         },
     );
@@ -236,11 +244,11 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
 
     if new_files.len() == 1 {
         println!(
-            "Added {source}@{selected_version} -> {}/{}",
-            config.output_dir, fetched_files[0].1.filename
+            "Added {source}@{} -> {}/{}",
+            resolved.manifest_version, config.output_dir, fetched_files[0].1.filename
         );
     } else {
-        println!("Added {source}@{selected_version}:");
+        println!("Added {source}@{}:", resolved.manifest_version);
         for (_, locked_file, _) in &fetched_files {
             println!("  {}/{}", config.output_dir, locked_file.filename);
         }
@@ -427,17 +435,27 @@ fn sorted_versions(versions: &[crate::registry::VersionInfo]) -> Vec<&str> {
     parsed.into_iter().map(|(s, _)| s).collect()
 }
 
-fn select_version(
+async fn select_version(
     pkg_info: &crate::registry::PackageInfo,
     version_flag: Option<&str>,
     interactive: bool,
-) -> Result<String> {
+    source: &PackageSource,
+    registry: &Registry,
+) -> Result<ResolvedVersion> {
     if let Some(v) = version_flag {
-        // r[impl add.version.validation]
-        if !pkg_info.versions.iter().any(|vi| vi.version == v) {
-            bail!("Version {v} not found for {}", pkg_info.name);
+        // r[impl add.version.github-ref]
+        // r[impl add.version.github-resolve]
+        if matches!(source, PackageSource::GitHub { .. }) {
+            return registry.resolve_github_ref(source, v).await;
         }
-        return Ok(v.to_string());
+        // r[impl add.version.validation]
+        if pkg_info.versions.iter().any(|vi| vi.version == v) {
+            return Ok(ResolvedVersion {
+                manifest_version: v.to_string(),
+                lockfile_version: v.to_string(),
+            });
+        }
+        bail!("Version {v} not found for {}", pkg_info.name);
     }
 
     // r[impl add.version.default]
@@ -451,7 +469,14 @@ fn select_version(
         .ok_or_else(|| anyhow::anyhow!("No versions found for {}", pkg_info.name))?;
 
     if !interactive {
-        return Ok(default_version.to_string());
+        // r[impl add.version.github-resolve]
+        if matches!(source, PackageSource::GitHub { .. }) {
+            return registry.resolve_github_ref(source, default_version).await;
+        }
+        return Ok(ResolvedVersion {
+            manifest_version: default_version.to_string(),
+            lockfile_version: default_version.to_string(),
+        });
     }
 
     let label = if pkg_info.tags.latest.is_some() {
@@ -463,7 +488,13 @@ fn select_version(
     let use_default = Confirm::new().with_prompt(label).default(true).interact()?;
 
     if use_default {
-        return Ok(default_version.to_string());
+        if matches!(source, PackageSource::GitHub { .. }) {
+            return registry.resolve_github_ref(source, default_version).await;
+        }
+        return Ok(ResolvedVersion {
+            manifest_version: default_version.to_string(),
+            lockfile_version: default_version.to_string(),
+        });
     }
 
     // r[impl add.version.list]
@@ -475,7 +506,13 @@ fn select_version(
         .default(0)
         .interact()?;
 
-    Ok(versions[selection].to_string())
+    if matches!(source, PackageSource::GitHub { .. }) {
+        return registry.resolve_github_ref(source, versions[selection]).await;
+    }
+    Ok(ResolvedVersion {
+        manifest_version: versions[selection].to_string(),
+        lockfile_version: versions[selection].to_string(),
+    })
 }
 
 // r[impl add.files.default-resolution]
