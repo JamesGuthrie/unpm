@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -36,12 +36,16 @@ pub fn remove_file(output_dir: &Path, filename: &str) -> anyhow::Result<()> {
 }
 
 /// If canonical mode is enabled, remove untracked files from output_dir.
-pub fn clean_if_canonical(config: &Config, lockfile: &Lockfile, output_dir: &Path) -> anyhow::Result<()> {
+pub fn clean_if_canonical(
+    config: &Config,
+    lockfile: &Lockfile,
+    output_dir: &Path,
+) -> anyhow::Result<()> {
     if config.canonical {
         let known: HashSet<&str> = lockfile
             .dependencies
             .values()
-            .map(|l| l.filename.as_str())
+            .flat_map(|l| l.files.iter().map(|f| f.filename.as_str()))
             .collect();
         clean(output_dir, &known)?;
     }
@@ -62,7 +66,8 @@ pub fn clean(output_dir: &Path, known_filenames: &HashSet<&str>) -> anyhow::Resu
             continue;
         }
         if let Some(name) = path.file_name().and_then(|n| n.to_str())
-            && !known_filenames.contains(name) {
+            && !known_filenames.contains(name)
+        {
             std::fs::remove_file(&path)
                 .with_context(|| format!("Failed to remove: {}", path.display()))?;
             println!("Removed untracked file: {name}");

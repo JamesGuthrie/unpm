@@ -19,7 +19,12 @@ pub async fn install() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let pb = ProgressBar::new(manifest.dependencies.len() as u64);
+    let total_files: u64 = lockfile
+        .dependencies
+        .values()
+        .map(|l| l.files.len() as u64)
+        .sum();
+    let pb = ProgressBar::new(total_files);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{msg} [{bar:30}] {pos}/{len}")
@@ -28,29 +33,32 @@ pub async fn install() -> anyhow::Result<()> {
     pb.set_message("Installing");
 
     for (name, dep) in &manifest.dependencies {
-        let locked = lockfile
-            .dependencies
-            .get(name)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first."
-                )
-            })?;
+        let locked = lockfile.dependencies.get(name).ok_or_else(|| {
+            anyhow::anyhow!("'{name}' is in unpm.toml but not in unpm.lock. Run `unpm add` first.")
+        })?;
 
-        // Use custom URL from manifest if specified, otherwise use lockfile URL
-        let url = dep.url().unwrap_or(&locked.url);
-        let result = fetcher.fetch(url).await?;
+        for locked_file in &locked.files {
+            // Use custom URL from manifest if specified (single-file deps only)
+            let url = if locked.files.len() == 1 {
+                dep.url().unwrap_or(&locked_file.url)
+            } else {
+                &locked_file.url
+            };
 
-        if !Fetcher::verify(&result.bytes, &locked.sha256) {
-            anyhow::bail!(
-                "SHA mismatch for {name}!\nExpected: {}\nGot:      {}\nThe remote file may have been tampered with.",
-                locked.sha256,
-                result.sha256
-            );
+            let result = fetcher.fetch(url).await?;
+
+            if !Fetcher::verify(&result.bytes, &locked_file.sha256) {
+                anyhow::bail!(
+                    "SHA mismatch for {name} ({})!\nExpected: {}\nGot:      {}",
+                    locked_file.filename,
+                    locked_file.sha256,
+                    result.sha256
+                );
+            }
+
+            vendor::place_file(output_dir, &locked_file.filename, &result.bytes)?;
+            pb.inc(1);
         }
-
-        vendor::place_file(output_dir, &locked.filename, &result.bytes)?;
-        pb.inc(1);
     }
 
     pb.finish_with_message("Done");

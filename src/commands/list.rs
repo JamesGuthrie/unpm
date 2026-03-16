@@ -12,12 +12,15 @@ pub fn list() -> anyhow::Result<()> {
 
     for (name, dep) in &manifest.dependencies {
         let version = dep.version();
-        let file_info = lockfile
-            .dependencies
-            .get(name)
-            .map(|l| l.filename.as_str())
-            .unwrap_or("(not installed)");
-        println!("{file_info}: {name}@{version}");
+        println!("{name}@{version}");
+        match lockfile.dependencies.get(name) {
+            Some(locked) => {
+                for file in &locked.files {
+                    println!("  {}", file.filename);
+                }
+            }
+            None => println!("  (not installed)"),
+        }
     }
 
     Ok(())

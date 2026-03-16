@@ -17,7 +17,9 @@ pub fn remove(package: &str) -> anyhow::Result<()> {
     }
 
     if let Some(locked) = lockfile.dependencies.remove(package) {
-        vendor::remove_file(Path::new(&config.output_dir), &locked.filename)?;
+        for file in &locked.files {
+            vendor::remove_file(Path::new(&config.output_dir), &file.filename)?;
+        }
     }
 
     manifest.save()?;

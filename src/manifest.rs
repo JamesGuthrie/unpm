@@ -13,12 +13,10 @@ pub enum Dependency {
         #[serde(skip_serializing_if = "Option::is_none")]
         file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        files: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         url: Option<String>,
-        #[serde(
-            default,
-            rename = "ignore-cves",
-            skip_serializing_if = "Vec::is_empty"
-        )]
+        #[serde(default, rename = "ignore-cves", skip_serializing_if = "Vec::is_empty")]
         ignore_cves: Vec<String>,
     },
 }
@@ -45,6 +43,13 @@ impl Dependency {
         }
     }
 
+    pub fn files(&self) -> Option<&[String]> {
+        match self {
+            Dependency::Short(_) => None,
+            Dependency::Extended { files, .. } => files.as_deref(),
+        }
+    }
+
     pub fn url(&self) -> Option<&str> {
         match self {
             Dependency::Short(_) => None,
@@ -62,7 +67,10 @@ impl Dependency {
 
 /// Quote a TOML key if it contains characters that require quoting.
 fn toml_key(key: &str) -> String {
-    if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         key.to_string()
     } else {
         format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
@@ -81,10 +89,15 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load() -> anyhow::Result<Self> {
-        let path = std::path::Path::new("unpm.toml");
+        Self::load_from(std::path::Path::new("unpm.toml"))
+    }
+
+    pub fn load_from(path: &std::path::Path) -> anyhow::Result<Self> {
         if path.exists() {
             let contents = std::fs::read_to_string(path)?;
-            Ok(toml::from_str(&contents)?)
+            let manifest: Self = toml::from_str(&contents)?;
+            manifest.validate()?;
+            Ok(manifest)
         } else {
             Ok(Self {
                 dependencies: BTreeMap::new(),
@@ -92,7 +105,33 @@ impl Manifest {
         }
     }
 
+    pub fn validate(&self) -> anyhow::Result<()> {
+        for (name, dep) in &self.dependencies {
+            if let Dependency::Extended {
+                file, files, url, ..
+            } = dep
+            {
+                if file.is_some() && files.is_some() {
+                    anyhow::bail!("{name}: `file` and `files` are mutually exclusive");
+                }
+                if url.is_some() && files.is_some() {
+                    anyhow::bail!("{name}: `url` and `files` are mutually exclusive");
+                }
+                if let Some(fs) = files
+                    && fs.is_empty()
+                {
+                    anyhow::bail!("{name}: `files` must not be empty");
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn save(&self) -> anyhow::Result<()> {
+        self.save_to(std::path::Path::new("unpm.toml"))
+    }
+
+    pub fn save_to(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let mut out = String::new();
         writeln!(out, "[dependencies]")?;
 
@@ -106,6 +145,7 @@ impl Manifest {
                     version,
                     source,
                     file,
+                    files,
                     url,
                     ignore_cves,
                 } => {
@@ -116,11 +156,16 @@ impl Manifest {
                     if let Some(f) = file {
                         fields.push(format!("file = {}", toml_string(f)));
                     }
+                    if let Some(fs) = files {
+                        let items: Vec<String> = fs.iter().map(|f| toml_string(f)).collect();
+                        fields.push(format!("files = [{}]", items.join(", ")));
+                    }
                     if let Some(u) = url {
                         fields.push(format!("url = {}", toml_string(u)));
                     }
                     if !ignore_cves.is_empty() {
-                        let cves: Vec<String> = ignore_cves.iter().map(|c| toml_string(c)).collect();
+                        let cves: Vec<String> =
+                            ignore_cves.iter().map(|c| toml_string(c)).collect();
                         fields.push(format!("ignore-cves = [{}]", cves.join(", ")));
                     }
                     writeln!(out, "{key} = {{ {} }}", fields.join(", "))?;
@@ -128,7 +173,7 @@ impl Manifest {
             }
         }
 
-        std::fs::write("unpm.toml", out)?;
+        std::fs::write(path, out)?;
         Ok(())
     }
 }

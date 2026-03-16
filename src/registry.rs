@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::Deserialize;
 use std::fmt;
 
@@ -13,9 +13,9 @@ impl PackageSource {
     /// Parse a package specifier: "gh:user/repo" for GitHub, anything else for npm.
     pub fn parse(input: &str) -> Result<Self> {
         if let Some(gh) = input.strip_prefix("gh:") {
-            let (user, repo) = gh
-                .split_once('/')
-                .ok_or_else(|| anyhow::anyhow!("GitHub source must be 'gh:user/repo', got '{input}'"))?;
+            let (user, repo) = gh.split_once('/').ok_or_else(|| {
+                anyhow::anyhow!("GitHub source must be 'gh:user/repo', got '{input}'")
+            })?;
             if user.is_empty() || repo.is_empty() {
                 bail!("GitHub source must be 'gh:user/repo', got '{input}'");
             }

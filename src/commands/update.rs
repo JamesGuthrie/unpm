@@ -1,11 +1,11 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::Path;
 
 use crate::config::Config;
 use crate::fetch::Fetcher;
-use crate::lockfile::{LockedDependency, Lockfile};
+use crate::lockfile::{LockedDependency, LockedFile, Lockfile};
 use crate::manifest::{Dependency, Manifest};
-use crate::registry::{latest_stable, PackageSource, Registry};
+use crate::registry::{PackageSource, Registry, latest_stable};
 use crate::vendor;
 
 pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) -> Result<()> {
@@ -49,7 +49,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
         let locked = lockfile
             .dependencies
             .get(name.as_str())
-            .ok_or_else(|| anyhow::anyhow!("'{name}' not found in lockfile"))?;
+            .ok_or_else(|| anyhow::anyhow!("'{name}' not found in lockfile"))?
+            .clone();
 
         let source = PackageSource::from_manifest(name, dep.source())?;
         let old_version = dep.version().to_string();
@@ -58,9 +59,7 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             Some(v) => v.to_string(),
             None => {
                 let pkg_info = registry.get_package(&source).await?;
-                let current_major = semver::Version::parse(&old_version)
-                    .ok()
-                    .map(|v| v.major);
+                let current_major = semver::Version::parse(&old_version).ok().map(|v| v.major);
 
                 match current_major {
                     Some(major) if !latest => {
@@ -69,7 +68,8 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                                 // If already at latest compatible, check if a newer major exists
                                 if v == old_version {
                                     if let Some(abs_latest) = latest_stable(&pkg_info.versions)
-                                        && abs_latest != old_version {
+                                        && abs_latest != old_version
+                                    {
                                         println!(
                                             "{name}: {old_version} held back \
                                              ({abs_latest} available, use --latest to update across major versions)"
@@ -103,15 +103,38 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
             continue;
         }
 
-        let file_path = extract_file_path(&locked.url, &old_version)?;
-        let url = Registry::file_url(&source, &new_version, &file_path);
-        let result = fetcher.fetch(&url).await?;
+        struct FetchedFile {
+            locked: LockedFile,
+            bytes: Vec<u8>,
+        }
+
+        let mut fetched: Vec<FetchedFile> = Vec::new();
+        for locked_file in &locked.files {
+            let file_path = crate::url::extract_file_path(&locked_file.url, &old_version)?;
+            let url = Registry::file_url(&source, &new_version, &file_path);
+            let result = match fetcher.fetch(&url).await {
+                Ok(r) => r,
+                Err(e) => bail!(
+                    "{name}: failed to fetch '{file_path}' at version {new_version}: {e}\nAdjust the `files` list in unpm.toml and retry."
+                ),
+            };
+            fetched.push(FetchedFile {
+                locked: LockedFile {
+                    url,
+                    sha256: result.sha256,
+                    size: result.size,
+                    filename: locked_file.filename.clone(),
+                },
+                bytes: result.bytes.to_vec(),
+            });
+        }
 
         let new_dep = match dep {
             Dependency::Short(_) => Dependency::Short(new_version.clone()),
             Dependency::Extended {
                 source,
                 file,
+                files,
                 url: url_override,
                 ignore_cves,
                 ..
@@ -119,26 +142,24 @@ pub async fn update(package: Option<&str>, version: Option<&str>, latest: bool) 
                 version: new_version.clone(),
                 source: source.clone(),
                 file: file.clone(),
+                files: files.clone(),
                 url: url_override.clone(),
                 ignore_cves: ignore_cves.clone(),
             },
         };
-
-        let filename = locked.filename.clone();
 
         manifest.dependencies.insert(name.clone(), new_dep);
         lockfile.dependencies.insert(
             name.clone(),
             LockedDependency {
                 version: new_version.clone(),
-                url,
-                sha256: result.sha256,
-                size: result.size,
-                filename: filename.clone(),
+                files: fetched.iter().map(|f| f.locked.clone()).collect(),
             },
         );
 
-        vendor::place_file(output_dir, &filename, &result.bytes)?;
+        for f in &fetched {
+            vendor::place_file(output_dir, &f.locked.filename, &f.bytes)?;
+        }
         println!("{name}: {old_version} -> {new_version}");
     }
 
@@ -166,17 +187,4 @@ fn latest_compatible(versions: &[crate::registry::VersionInfo], major: u64) -> O
 
     compatible.sort_by(|a, b| b.1.cmp(&a.1));
     compatible.into_iter().next().map(|(s, _)| s)
-}
-
-/// Extract the file path portion from a jsdelivr CDN URL.
-fn extract_file_path(url: &str, version: &str) -> Result<String> {
-    let marker = format!("@{version}/");
-    let idx = url
-        .find(&marker)
-        .ok_or_else(|| anyhow::anyhow!("Cannot parse file path from lockfile URL: {url}"))?;
-    let path = &url[idx + marker.len()..];
-    if path.is_empty() {
-        bail!("No file path found in lockfile URL: {url}");
-    }
-    Ok(path.to_string())
 }

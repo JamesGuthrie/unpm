@@ -22,10 +22,7 @@ async fn test_get_package_not_found() {
 async fn test_get_npm_package_files() {
     let registry = Registry::new();
     let source = PackageSource::parse("htmx.org").unwrap();
-    let files = registry
-        .get_package_files(&source, "2.0.4")
-        .await
-        .unwrap();
+    let files = registry.get_package_files(&source, "2.0.4").await.unwrap();
     assert!(files.default.is_some());
     assert!(!files.files.is_empty());
     let has_htmx = files.files.iter().any(|f| f.path.contains("htmx.min.js"));
@@ -46,12 +43,16 @@ async fn test_get_github_package_files() {
     let registry = Registry::new();
     let source = PackageSource::parse("gh:alpinejs/alpine").unwrap();
     // Use a known version
-    let version = &registry.get_package(&source).await.unwrap()
-        .versions.last().unwrap().version.clone();
-    let files = registry
-        .get_package_files(&source, version)
+    let version = &registry
+        .get_package(&source)
         .await
-        .unwrap();
+        .unwrap()
+        .versions
+        .last()
+        .unwrap()
+        .version
+        .clone();
+    let files = registry.get_package_files(&source, version).await.unwrap();
     assert!(!files.files.is_empty());
 }
 

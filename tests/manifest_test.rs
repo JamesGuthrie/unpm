@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use unpm::manifest::{Dependency, Manifest};
 
 #[test]
@@ -87,8 +88,14 @@ some-lib = { version = "1.0.0", url = "https://example.com/lib.min.js" }
     let manifest: Manifest = toml::from_str(toml).unwrap();
     assert_eq!(manifest.dependencies.len(), 3);
 
-    assert!(matches!(manifest.dependencies["htmx.org"], Dependency::Short(_)));
-    assert!(matches!(manifest.dependencies["d3"], Dependency::Extended { .. }));
+    assert!(matches!(
+        manifest.dependencies["htmx.org"],
+        Dependency::Short(_)
+    ));
+    assert!(matches!(
+        manifest.dependencies["d3"],
+        Dependency::Extended { .. }
+    ));
 }
 
 #[test]
@@ -113,5 +120,122 @@ fn inline_table_format_roundtrips() {
     assert_eq!(reparsed.dependencies.len(), 2);
     assert_eq!(reparsed.dependencies["htmx.org"].version(), "2.0.4");
     assert_eq!(reparsed.dependencies["gh:user/repo"].version(), "1.0.0");
-    assert_eq!(reparsed.dependencies["gh:user/repo"].file(), Some("dist/lib.js"));
+    assert_eq!(
+        reparsed.dependencies["gh:user/repo"].file(),
+        Some("dist/lib.js")
+    );
+}
+
+// Task 3 tests
+
+#[test]
+fn parse_files_form() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = ["dist/uPlot.min.js", "dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let dep = &manifest.dependencies["uplot"];
+    assert_eq!(dep.version(), "1.6.31");
+    assert_eq!(
+        dep.files(),
+        Some(
+            &[
+                "dist/uPlot.min.js".to_string(),
+                "dist/uPlot.min.css".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(dep.file(), None);
+}
+
+#[test]
+fn files_single_element_valid() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = ["dist/uPlot.min.js"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let dep = &manifest.dependencies["uplot"];
+    assert_eq!(dep.files(), Some(&["dist/uPlot.min.js".to_string()][..]));
+}
+
+#[test]
+fn save_roundtrip_with_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest_path = dir.path().join("unpm.toml");
+
+    let manifest = Manifest {
+        dependencies: BTreeMap::from([(
+            "uplot".to_string(),
+            Dependency::Extended {
+                version: "1.6.31".to_string(),
+                source: None,
+                file: None,
+                files: Some(vec![
+                    "dist/uPlot.min.js".to_string(),
+                    "dist/uPlot.min.css".to_string(),
+                ]),
+                url: None,
+                ignore_cves: Vec::new(),
+            },
+        )]),
+    };
+
+    manifest.save_to(&manifest_path).unwrap();
+    let reparsed = Manifest::load_from(&manifest_path).unwrap();
+    let dep = &reparsed.dependencies["uplot"];
+    assert_eq!(dep.version(), "1.6.31");
+    assert_eq!(
+        dep.files(),
+        Some(
+            &[
+                "dist/uPlot.min.js".to_string(),
+                "dist/uPlot.min.css".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(dep.file(), None);
+}
+
+#[test]
+fn reject_file_and_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", file = "dist/uPlot.min.js", files = ["dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("mutually exclusive"),
+        "expected mutually exclusive error, got: {err}"
+    );
+}
+
+#[test]
+fn reject_url_and_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", url = "https://example.com/lib.js", files = ["dist/uPlot.min.css"] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("mutually exclusive"),
+        "expected mutually exclusive error, got: {err}"
+    );
+}
+
+#[test]
+fn reject_empty_files() {
+    let toml = r#"
+[dependencies]
+uplot = { version = "1.6.31", files = [] }
+"#;
+    let manifest: Manifest = toml::from_str(toml).unwrap();
+    let err = manifest.validate().unwrap_err();
+    assert!(
+        err.to_string().contains("must not be empty"),
+        "expected empty error, got: {err}"
+    );
 }

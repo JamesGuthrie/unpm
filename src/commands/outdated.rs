@@ -1,5 +1,5 @@
 use crate::manifest::Manifest;
-use crate::registry::{latest_stable, PackageSource, Registry};
+use crate::registry::{PackageSource, Registry, latest_stable};
 use futures::stream::{self, StreamExt};
 
 pub async fn outdated() -> anyhow::Result<()> {
@@ -26,11 +26,8 @@ pub async fn outdated() -> anyhow::Result<()> {
         .map(|(name, current, source)| {
             let registry = &registry;
             async move {
-                let latest = registry
-                    .get_package(&source)
-                    .await
-                    .ok()
-                    .and_then(|info| {
+                let latest =
+                    registry.get_package(&source).await.ok().and_then(|info| {
                         info.tags.latest.or_else(|| latest_stable(&info.versions))
                     });
                 (name, current, latest)
@@ -43,7 +40,8 @@ pub async fn outdated() -> anyhow::Result<()> {
     let mut found = false;
     for (name, current, latest) in &results {
         if let Some(latest) = latest
-            && latest != current {
+            && latest != current
+        {
             if !found {
                 println!("Outdated dependencies:");
                 found = true;

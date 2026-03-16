@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use sha2::{Digest, Sha256};
 
 /// 50 MB — no vendored static asset should be anywhere near this.
@@ -35,14 +35,14 @@ impl Fetcher {
         log::debug!("fetching {url}");
         let response = self.client.get(url).send().await?.error_for_status()?;
 
-        if let Some(len) = response.content_length() {
-            if len > MAX_RESPONSE_SIZE {
-                bail!(
-                    "Response too large ({} bytes, max {}). Aborting download from {url}",
-                    len,
-                    MAX_RESPONSE_SIZE
-                );
-            }
+        if let Some(len) = response.content_length()
+            && len > MAX_RESPONSE_SIZE
+        {
+            bail!(
+                "Response too large ({} bytes, max {}). Aborting download from {url}",
+                len,
+                MAX_RESPONSE_SIZE
+            );
         }
 
         let bytes = response.bytes().await?.to_vec();

@@ -47,14 +47,17 @@ Dependencies are declared in `unpm.toml`:
 htmx.org = "2.0.7"
 idiomorph = { version = "0.7.2", file = "dist/idiomorph.js" }
 "gh:answerdotai/fasthtml-js" = { version = "1.0.12", file = "fasthtml.js" }
+uplot = { version = "1.6.31", files = ["dist/uPlot.min.js", "dist/uPlot.min.css"] }
 ```
 
-Short form uses the package's default entry point. Extended form allows specifying a `file` path within the package, a custom `url`, or a list of CVEs to ignore:
+Short form uses the package's default entry point. Extended form allows specifying a `file` path within the package, or `files` for multiple files. You can also set a custom `url` (single file only) or a list of CVEs to ignore:
 
 ```toml
 [dependencies]
 lodash = { version = "4.17.21", file = "lodash.min.js", ignore-cves = ["GHSA-x5rq-j2xg-h7qm"] }
 ```
+
+`file` and `files` are mutually exclusive.
 
 ## Commands
 
@@ -63,24 +66,29 @@ lodash = { version = "4.17.21", file = "lodash.min.js", ignore-cves = ["GHSA-x5r
 | `unpm add <package[@version]>` | Add a dependency (interactive) |
 | `unpm install` | Fetch all dependencies |
 | `unpm check` | Verify integrity, CVEs, and freshness |
-| `unpm list` | List all dependencies |
+| `unpm list` | List all dependencies and their files |
 | `unpm outdated` | Show dependencies with newer versions available |
 | `unpm update [package[@version]]` | Update one or all dependencies (same major) |
 | `unpm remove <package>` | Remove a dependency |
 
 ### `unpm add`
 
-Interactive flow: select version, pick a file from the package, choose between minified/unminified variants, confirm.
+Interactive flow: select version, pick files from the package (multi-select), confirm.
 
 Non-interactive mode for CI:
 
 ```sh
 unpm add htmx.org --version 2.0.7 --file dist/htmx.min.js
+
+# Add multiple files from the same package
+unpm add uplot --version 1.6.31 --file dist/uPlot.min.js --file dist/uPlot.min.css
 ```
+
+Running `add` on an existing package appends the new files to it.
 
 ### `unpm check`
 
-Runs four checks per dependency:
+Runs four checks per dependency (integrity checks run per file):
 
 1. **Lockfile SHA** -- vendored file matches the hash recorded at add time
 2. **CDN SHA** -- vendored file matches the hash jsdelivr currently reports (independent second source)
@@ -96,7 +104,9 @@ unpm check --fail-on-outdated    # treat outdated deps as errors
 
 ### `unpm update`
 
-Updates dependencies within the same major version by default. If a newer major version exists but can't be installed, unpm tells you:
+Updates dependencies within the same major version by default. For multi-file dependencies, all files are updated atomically -- if any file fails to fetch at the new version, none are updated.
+
+If a newer major version exists but can't be installed, unpm tells you:
 
 ```
 htmx.org: 1.9.12 held back (2.0.7 available, use --latest to update across major versions)

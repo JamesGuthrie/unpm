@@ -1,4 +1,4 @@
-use unpm::lockfile::{LockedDependency, Lockfile};
+use unpm::lockfile::{LockedDependency, LockedFile, Lockfile};
 
 #[test]
 fn empty_lockfile() {
@@ -15,10 +15,12 @@ fn roundtrip_json() {
         "htmx.org".to_string(),
         LockedDependency {
             version: "2.0.4".to_string(),
-            url: "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js".to_string(),
-            sha256: "abc123".to_string(),
-            size: 12345,
-            filename: "htmx.org_htmx.min.js".to_string(),
+            files: vec![LockedFile {
+                url: "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js".to_string(),
+                sha256: "abc123".to_string(),
+                size: 12345,
+                filename: "htmx.org_htmx.min.js".to_string(),
+            }],
         },
     );
 
@@ -28,13 +30,92 @@ fn roundtrip_json() {
     assert_eq!(reparsed.dependencies.len(), 1);
     let dep = &reparsed.dependencies["htmx.org"];
     assert_eq!(dep.version, "2.0.4");
-    assert_eq!(dep.sha256, "abc123");
-    assert_eq!(dep.size, 12345);
-    assert_eq!(dep.filename, "htmx.org_htmx.min.js");
+    assert_eq!(dep.files.len(), 1);
+    assert_eq!(dep.files[0].sha256, "abc123");
+    assert_eq!(dep.files[0].size, 12345);
+    assert_eq!(dep.files[0].filename, "htmx.org_htmx.min.js");
 }
 
 #[test]
 fn from_json_string() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4",
+            "files": [{
+                "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+                "sha256": "abc123",
+                "size": 12345,
+                "filename": "htmx.org_htmx.min.js"
+            }]
+        }
+    }"#;
+    let lockfile = Lockfile::from_json(json).unwrap();
+    assert_eq!(lockfile.dependencies.len(), 1);
+    assert_eq!(lockfile.dependencies["htmx.org"].version, "2.0.4");
+    assert_eq!(
+        lockfile.dependencies["htmx.org"].files[0].filename,
+        "htmx.org_htmx.min.js"
+    );
+}
+
+#[test]
+fn new_format_roundtrip() {
+    let mut lockfile = Lockfile::default();
+    lockfile.dependencies.insert(
+        "alpine".to_string(),
+        LockedDependency {
+            version: "3.14.0".to_string(),
+            files: vec![LockedFile {
+                url: "https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js".to_string(),
+                sha256: "def456".to_string(),
+                size: 54321,
+                filename: "alpine_cdn.min.js".to_string(),
+            }],
+        },
+    );
+
+    let json = lockfile.to_json().unwrap();
+    let reparsed = Lockfile::from_json(&json).unwrap();
+    assert_eq!(reparsed.dependencies["alpine"].files.len(), 1);
+    assert_eq!(reparsed.dependencies["alpine"].files[0].sha256, "def456");
+}
+
+#[test]
+fn new_format_multi_file() {
+    let mut lockfile = Lockfile::default();
+    lockfile.dependencies.insert(
+        "bootstrap".to_string(),
+        LockedDependency {
+            version: "5.3.0".to_string(),
+            files: vec![
+                LockedFile {
+                    url: "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"
+                        .to_string(),
+                    sha256: "aaa111".to_string(),
+                    size: 10000,
+                    filename: "bootstrap_bootstrap.min.js".to_string(),
+                },
+                LockedFile {
+                    url: "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+                        .to_string(),
+                    sha256: "bbb222".to_string(),
+                    size: 20000,
+                    filename: "bootstrap_bootstrap.min.css".to_string(),
+                },
+            ],
+        },
+    );
+
+    let json = lockfile.to_json().unwrap();
+    let reparsed = Lockfile::from_json(&json).unwrap();
+    let dep = &reparsed.dependencies["bootstrap"];
+    assert_eq!(dep.files.len(), 2);
+    assert_eq!(dep.files[0].filename, "bootstrap_bootstrap.min.js");
+    assert_eq!(dep.files[1].filename, "bootstrap_bootstrap.min.css");
+}
+
+#[test]
+fn migrate_old_format() {
     let json = r#"{
         "htmx.org": {
             "version": "2.0.4",
@@ -45,7 +126,50 @@ fn from_json_string() {
         }
     }"#;
     let lockfile = Lockfile::from_json(json).unwrap();
-    assert_eq!(lockfile.dependencies.len(), 1);
-    assert_eq!(lockfile.dependencies["htmx.org"].version, "2.0.4");
-    assert_eq!(lockfile.dependencies["htmx.org"].filename, "htmx.org_htmx.min.js");
+    let dep = &lockfile.dependencies["htmx.org"];
+    assert_eq!(dep.version, "2.0.4");
+    assert_eq!(dep.files.len(), 1);
+    assert_eq!(
+        dep.files[0].url,
+        "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"
+    );
+    assert_eq!(dep.files[0].sha256, "abc123");
+    assert_eq!(dep.files[0].size, 12345);
+    assert_eq!(dep.files[0].filename, "htmx.org_htmx.min.js");
+}
+
+#[test]
+fn reject_corrupt_lockfile_both_formats() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4",
+            "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+            "sha256": "abc123",
+            "size": 12345,
+            "filename": "htmx.org_htmx.min.js",
+            "files": [{
+                "url": "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+                "sha256": "abc123",
+                "size": 12345,
+                "filename": "htmx.org_htmx.min.js"
+            }]
+        }
+    }"#;
+    let result = Lockfile::from_json(json);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("corrupt"),
+        "Expected error about corrupt lockfile, got: {err}"
+    );
+}
+
+#[test]
+fn reject_lockfile_entry_with_no_file_data() {
+    let json = r#"{
+        "htmx.org": {
+            "version": "2.0.4"
+        }
+    }"#;
+    assert!(Lockfile::from_json(json).is_err());
 }
