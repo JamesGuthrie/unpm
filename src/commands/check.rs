@@ -7,11 +7,15 @@ use crate::registry::{PackageSource, Registry, latest_stable};
 use futures::stream::{self, StreamExt};
 use std::path::Path;
 
+enum CveQuery {
+    Npm { package: String, version: String },
+    GitCommit { sha: String },
+}
+
 enum CheckTask {
     Cve {
         name: String,
-        cve_name: String,
-        version: String,
+        query: CveQuery,
         ignore_cves: Vec<String>,
     },
     CdnHash {
@@ -109,7 +113,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 tasks.push(CheckTask::CdnHash {
                     name: name.clone(),
                     source,
-                    version: dep.version().to_string(),
+                    version: locked.version.clone(),
                     local_sha256,
                     url: locked_file.url.clone(),
                 });
@@ -118,15 +122,24 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
 
         // Queue CVE check per package
         // r[impl check.cve.query]
+        // r[impl check.cve.git-rev]
         let source = PackageSource::from_manifest(name, dep.source()).ok();
-        let cve_name = match &source {
-            Some(PackageSource::Npm(n)) => n.clone(),
-            _ => name.clone(),
+        let query = match &source {
+            Some(PackageSource::Npm(n)) => CveQuery::Npm {
+                package: n.clone(),
+                version: dep.version().to_string(),
+            },
+            Some(PackageSource::GitHub { .. }) => CveQuery::GitCommit {
+                sha: locked.version.clone(),
+            },
+            None => CveQuery::Npm {
+                package: name.clone(),
+                version: dep.version().to_string(),
+            },
         };
         tasks.push(CheckTask::Cve {
             name: name.clone(),
-            cve_name,
-            version: dep.version().to_string(),
+            query,
             ignore_cves: dep.ignore_cves().to_vec(),
         });
 
@@ -149,11 +162,17 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                 match task {
                     CheckTask::Cve {
                         name,
-                        cve_name,
-                        version,
+                        query,
                         ignore_cves,
                     } => {
-                        let result = cve_checker.check(&cve_name, &version).await;
+                        let result = match &query {
+                            CveQuery::Npm { package, version } => {
+                                cve_checker.check(package, version).await
+                            }
+                            CveQuery::GitCommit { sha } => {
+                                cve_checker.check_commit(sha).await
+                            }
+                        };
                         CheckResult::Cve {
                             name,
                             result,

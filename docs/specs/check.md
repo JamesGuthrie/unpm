@@ -46,14 +46,11 @@ failure), the command MUST report an integrity error.
 r[check.cve.query]
 Each dependency MUST be checked for known vulnerabilities by querying
 OSV.dev. For npm-sourced packages, the query MUST use the `npm`
-ecosystem with the npm package name. For GitHub-sourced packages, the
-query MUST use the `GIT` ecosystem with the full repository URL
-(e.g., `https://github.com/user/repo.git`) as the package name.
+ecosystem with the npm package name.
 
 r[check.cve.git-rev]
-When a GitHub-sourced dependency's version is a commit SHA rather than
-a tag, the CVE query MUST use the OSV.dev commit query instead of an
-ecosystem/version query.
+For GitHub-sourced packages, the CVE query MUST use the OSV.dev commit
+query with the commit SHA from the lockfile.
 
 r[check.cve.ignore]
 Vulnerabilities whose ID appears in the dependency's `ignore_cves`

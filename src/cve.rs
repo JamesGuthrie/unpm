@@ -19,6 +19,11 @@ struct ApiRequest {
 }
 
 #[derive(Serialize)]
+struct ApiCommitRequest {
+    commit: String,
+}
+
+#[derive(Serialize)]
 struct ApiPackage {
     name: String,
     ecosystem: String,
@@ -68,10 +73,23 @@ impl CveChecker {
             version: version.to_string(),
         };
 
+        self.query(&body).await
+    }
+
+    // r[impl check.cve.git-rev]
+    pub async fn check_commit(&self, commit: &str) -> Result<Vec<Vulnerability>> {
+        let body = ApiCommitRequest {
+            commit: commit.to_string(),
+        };
+
+        self.query(&body).await
+    }
+
+    async fn query(&self, body: &impl Serialize) -> Result<Vec<Vulnerability>> {
         let resp: ApiResponse = self
             .client
             .post("https://api.osv.dev/v1/query")
-            .json(&body)
+            .json(body)
             .send()
             .await?
             .error_for_status()?
