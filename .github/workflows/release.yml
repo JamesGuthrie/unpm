@@ -1,6 +1,16 @@
 name: Release
 on:
   workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to upload artifacts to (e.g. v0.2.0)"
+        required: true
+        type: string
 
 jobs:
   build:
@@ -23,11 +33,11 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     permissions:
-      id-token: write
+      contents: write
       attestations: write
-      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -47,28 +57,11 @@ jobs:
         run: cp target/${{ matrix.target }}/release/unpm ${{ matrix.artifact }}
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ matrix.artifact }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            unpm-linux-x86_64/unpm-linux-x86_64
-            unpm-linux-aarch64/unpm-linux-aarch64
-            unpm-darwin-x86_64/unpm-darwin-x86_64
-            unpm-darwin-aarch64/unpm-darwin-aarch64
+      - name: Upload release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag_name }}" "${{ matrix.artifact }}"
