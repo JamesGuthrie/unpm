@@ -1,5 +1,6 @@
 use unpm::cve::CveChecker;
 
+// r[verify check.cve.query]
 #[tokio::test]
 async fn test_check_no_vulnerabilities() {
     let checker = CveChecker::new();
@@ -16,6 +17,7 @@ async fn test_check_known_vulnerability() {
     assert!(!vulns[0].id.is_empty());
 }
 
+// r[verify check.cve.git-rev]
 #[tokio::test]
 async fn test_check_commit_no_vulnerabilities() {
     let checker = CveChecker::new();

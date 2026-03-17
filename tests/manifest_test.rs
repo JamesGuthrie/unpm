@@ -43,6 +43,7 @@ d3 = { version = "7.9.0", file = "dist/d3.min.js", ignore-cves = ["CVE-2024-1234
 
 // r[verify manifest.serial.short]
 // r[verify manifest.serial.extended]
+// r[verify manifest.serial.order]
 #[test]
 fn roundtrip_serialization() {
     let toml_input = r#"

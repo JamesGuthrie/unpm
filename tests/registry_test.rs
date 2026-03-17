@@ -10,6 +10,7 @@ async fn test_get_npm_package_versions() {
     assert!(pkg.tags.latest.is_some());
 }
 
+// r[verify add.resolve.not-found]
 #[tokio::test]
 async fn test_get_package_not_found() {
     let registry = Registry::new();
@@ -78,7 +79,7 @@ fn test_github_file_url() {
 
 // r[verify manifest.source.default]
 // r[verify manifest.source.github-prefix]
-// r[verify add.resolution.github-validation]
+// r[verify add.input.github-validation]
 #[test]
 fn test_parse_package_source() {
     let npm = PackageSource::parse("htmx.org").unwrap();
@@ -147,7 +148,7 @@ async fn test_resolve_github_ref_not_found() {
     assert!(result.is_err());
 }
 
-// r[verify add.resolution.source]
+// r[verify add.input.source]
 #[test]
 fn test_package_source_display() {
     let npm = PackageSource::parse("htmx.org").unwrap();

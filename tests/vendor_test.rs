@@ -21,6 +21,7 @@ fn test_place_file_creates_dirs() {
     assert!(output_dir.join("lib.js").exists());
 }
 
+// r[verify remove.files.delete]
 #[test]
 fn test_remove_file() {
     let dir = TempDir::new().unwrap();
