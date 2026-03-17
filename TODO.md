@@ -7,3 +7,4 @@
 - [ ] specify 'stable' version and clean up in specs
 - [ ] integration tests
 - [x] version
+- [x] github api token (for tests)

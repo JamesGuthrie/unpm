@@ -292,20 +292,25 @@ impl Registry {
 
         let gh_url = format!("{GITHUB_API_BASE}/repos/{user}/{repo}/commits/{version}");
         log::debug!("GET {gh_url}");
-        let resp = self
+        let mut req = self
             .client
             .get(&gh_url)
             .header("Accept", "application/vnd.github.sha")
-            .header("User-Agent", "unpm")
-            .send()
-            .await?;
+            .header("User-Agent", "unpm");
+        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        let resp = req.send().await?;
         log::debug!("  -> {}", resp.status());
 
         if resp.status() == reqwest::StatusCode::FORBIDDEN {
-            bail!(
-                "GitHub API rate limit exceeded (60 requests/hour for unauthenticated requests). \
-                 Please wait and try again."
-            );
+            let authed = std::env::var("GITHUB_TOKEN").is_ok();
+            let hint = if authed {
+                "authenticated"
+            } else {
+                "unauthenticated (set GITHUB_TOKEN to increase limit)"
+            };
+            bail!("GitHub API rate limit exceeded ({hint}). Please wait and try again.");
         }
 
         if resp.status() == reqwest::StatusCode::NOT_FOUND

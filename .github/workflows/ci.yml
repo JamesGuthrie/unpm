@@ -8,4 +8,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: cargo clippy -- -D warnings
