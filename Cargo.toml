@@ -3,6 +3,8 @@ name = "unpm"
 version = "0.1.0"
 edition = "2024"
 description = "Lightweight vendoring of static assets. No node_modules, no runtime fetching."
+license = "MIT"
+repository = "https://github.com/JamesGuthrie/unpm"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

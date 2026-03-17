@@ -8,3 +8,4 @@
 - [ ] integration tests
 - [x] version
 - [x] github api token (for tests)
+- [ ] publish crate
