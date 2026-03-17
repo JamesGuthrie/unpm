@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/JamesGuthrie/unpm/compare/unpm-v0.1.0...unpm-v0.2.0) (2026-03-16)
+
+
+### Features
+
+* resolve all GitHub versions to commit SHAs via GitHub API ([23a1001](https://github.com/JamesGuthrie/unpm/commit/23a10012b9c5cf5c46c298cb9f1cec97dfef0692))
+
+
+### Bug Fixes
+
+* use lockfile version for CDN hash verification of GitHub deps ([09e76a2](https://github.com/JamesGuthrie/unpm/commit/09e76a2799f7806ff8953217bbc0604fefb3764a))
+
 ## 0.1.0 (2026-03-16)
 
 
