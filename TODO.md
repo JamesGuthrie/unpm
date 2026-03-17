@@ -5,7 +5,7 @@
 - [x] remove url from manifest
 - [x] implement GIT ecosystem CVE check
 - [ ] specify 'stable' version and clean up in specs
-- [ ] integration tests
+- [x] integration tests
 - [x] version
 - [x] github api token (for tests)
 - [x] publish crate

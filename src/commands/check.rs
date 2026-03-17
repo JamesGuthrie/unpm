@@ -169,9 +169,7 @@ pub async fn check(allow_vulnerable: bool, fail_on_outdated: bool) -> anyhow::Re
                             CveQuery::Npm { package, version } => {
                                 cve_checker.check(package, version).await
                             }
-                            CveQuery::GitCommit { sha } => {
-                                cve_checker.check_commit(sha).await
-                            }
+                            CveQuery::GitCommit { sha } => cve_checker.check_commit(sha).await,
                         };
                         CheckResult::Cve {
                             name,

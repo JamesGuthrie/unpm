@@ -73,7 +73,10 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
     };
 
     // Step 3: Get file listing
-    println!("Fetching file list for {source}@{}...", resolved.lockfile_version);
+    println!(
+        "Fetching file list for {source}@{}...",
+        resolved.lockfile_version
+    );
     let pkg_files = registry
         .get_package_files(&source, &resolved.lockfile_version)
         .await?;
@@ -85,7 +88,9 @@ pub async fn add(package: &str, version: Option<&str>, files_flag: &[String]) ->
         .map(|l| {
             l.files
                 .iter()
-                .filter_map(|f| crate::url::extract_file_path(&f.url, &resolved.lockfile_version).ok())
+                .filter_map(|f| {
+                    crate::url::extract_file_path(&f.url, &resolved.lockfile_version).ok()
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -507,7 +512,9 @@ async fn select_version(
         .interact()?;
 
     if matches!(source, PackageSource::GitHub { .. }) {
-        return registry.resolve_github_ref(source, versions[selection]).await;
+        return registry
+            .resolve_github_ref(source, versions[selection])
+            .await;
     }
     Ok(ResolvedVersion {
         manifest_version: versions[selection].to_string(),

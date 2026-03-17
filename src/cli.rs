@@ -1,7 +1,11 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "unpm", about = "Lightweight vendoring of static assets", version)]
+#[command(
+    name = "unpm",
+    about = "Lightweight vendoring of static assets",
+    version
+)]
 pub struct Cli {
     /// Enable debug logging
     #[arg(long, global = true)]
