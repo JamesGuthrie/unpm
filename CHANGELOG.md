@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/JamesGuthrie/unpm/compare/v0.1.0...v0.2.0) (2026-03-17)
+
+
+### Features
+
+* add --version CLI flag ([df635cc](https://github.com/JamesGuthrie/unpm/commit/df635cc721f4859908a78f335ce0238c74f9322b))
+* use GITHUB_TOKEN for authenticated GitHub API requests ([f4d90a1](https://github.com/JamesGuthrie/unpm/commit/f4d90a1e7b540550db7c158606df7da319bd4a80))
+
 ## 0.1.0 (2026-03-17)
 
 
