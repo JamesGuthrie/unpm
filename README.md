@@ -6,10 +6,14 @@ unpm fetches versioned files from npm and GitHub packages via [jsdelivr](https:/
 
 ## Install
 
-Download a prebuilt binary from [releases](https://github.com/JamesGuthrie/unpm/releases), or build from source:
-
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/JamesGuthrie/unpm/main/install.sh | sh
 ```
-cargo install --path .
+
+Or download a prebuilt binary from [releases](https://github.com/JamesGuthrie/unpm/releases), or build from source:
+
+```sh
+cargo install unpm
 ```
 
 ## Quick Start
