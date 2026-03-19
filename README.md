@@ -152,10 +152,10 @@ Package names must be exact. No fuzzy matching or alias resolution -- this preve
 Add to your CI workflow to verify vendored dependencies on every push:
 
 ```yaml
-- uses: JamesGuthrie/unpm@v1
+- uses: JamesGuthrie/unpm@main
 ```
 
-The action downloads the `unpm` binary and runs `unpm check`. It exits non-zero on SHA mismatches or known vulnerabilities.
+The action downloads the `unpm` binary and runs `unpm check`. It exits non-zero on SHA mismatches or known vulnerabilities. The binary version is independent of the action ref — use the `version` input to pin a specific binary version.
 
 ### Inputs
 
@@ -175,5 +175,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: JamesGuthrie/unpm@v1
+      - uses: JamesGuthrie/unpm@main
 ```
