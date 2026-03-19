@@ -2,7 +2,11 @@
 
 Vendor static JS, CSS, and SVG assets directly into your repository. No `node_modules`, no runtime CDN dependency, no build step.
 
-unpm fetches versioned files from npm and GitHub packages via [jsdelivr](https://www.jsdelivr.com/), locks them with SHA-256 hashes, and checks for known vulnerabilities.
+## Why
+
+Some projects want to use artifacts from the node ecosystem (a JS library, a CSS framework, an SVG icon set) without adopting npm, bundling, or a build step. The usual alternative is copy-pasting files into the repo, which works until you forget where they came from, miss a security patch, or can't tell what version you're running.
+
+unpm gives you a lightweight way to declare your dependencies, verify their integrity (via SHA-256 locked files fetched from [jsdelivr](https://www.jsdelivr.com/)), and find out when updates are available or vulnerabilities have been discovered in assets you've vendored.
 
 ## Install
 
