@@ -57,7 +57,11 @@
         let pkgs = import nixpkgs { inherit system; overlays = [ self.overlays.default ]; };
         in {
           default = pkgs.mkShell {
-            packages = [ pkgs.tracey ];
+            packages = [
+              pkgs.tracey
+              pkgs.asciinema
+              pkgs.asciinema-agg
+            ];
           };
         }
       );

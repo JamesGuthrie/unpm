@@ -8,6 +8,7 @@ Some projects want to use artifacts from the node ecosystem (a JS library, a CSS
 
 unpm gives you a lightweight way to declare your dependencies, verify their integrity (via SHA-256 locked files fetched from [jsdelivr](https://www.jsdelivr.com/)), and find out when updates are available or vulnerabilities have been discovered in assets you've vendored.
 
+<!-- to regenerate (font must be installed): agg --font-family "JetBrainsMono Nerd Font" --theme asciinema demo.cast demo.gif -->
 ![demo](https://raw.githubusercontent.com/JamesGuthrie/unpm/main/demo.gif)
 
 ## Install
