@@ -8,6 +8,8 @@ Some projects want to use artifacts from the node ecosystem (a JS library, a CSS
 
 unpm gives you a lightweight way to declare your dependencies, verify their integrity (via SHA-256 locked files fetched from [jsdelivr](https://www.jsdelivr.com/)), and find out when updates are available or vulnerabilities have been discovered in assets you've vendored.
 
+![demo](https://raw.githubusercontent.com/JamesGuthrie/unpm/main/demo.gif)
+
 ## Install
 
 ```sh
@@ -83,7 +85,7 @@ lodash = { version = "4.17.21", file = "lodash.min.js", ignore-cves = ["GHSA-x5r
 
 Interactive flow: select version, pick files from the package (multi-select), confirm.
 
-Non-interactive mode for CI:
+Non-interactive mode:
 
 ```sh
 unpm add htmx.org --version 2.0.7 --file dist/htmx.min.js
