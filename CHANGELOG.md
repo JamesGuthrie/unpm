@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/JamesGuthrie/unpm/compare/v0.2.0...v0.3.0) (2026-03-19)
+
+
+### Features
+
+* add install.sh for one-line binary installation ([4ea473b](https://github.com/JamesGuthrie/unpm/commit/4ea473b5fd50afc161998048d7ba4802a9f41a90))
+
 ## [0.2.0](https://github.com/JamesGuthrie/unpm/compare/v0.1.0...v0.2.0) (2026-03-17)
 
 
