@@ -9,3 +9,4 @@
 - [x] version
 - [x] github api token (for tests)
 - [x] publish crate
+- [ ] `unpm sbom` to produce an SBOM from unpm.lock file
